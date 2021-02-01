@@ -4,8 +4,6 @@ const websocket = require('ws');
 
 const wss = new websocket.Server({server});
 
-var wsList = [];
-
 wss.on("connection", (ws)=>{
 
     console.log("client connected.");

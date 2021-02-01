@@ -8,6 +8,20 @@ namespace ChatWebSocket
 {
     public class WebSocketConnection : MonoBehaviour
     {
+        [System.Serializable]
+        public struct RoomData
+        {
+            public string roomName;
+        }
+
+        [System.Serializable]
+        public struct ServerCreateRoomEventData
+        {
+            public string Event;
+            public RoomData Data;
+        }
+
+        
 
         private WebSocket ws;
 
@@ -28,8 +42,8 @@ namespace ChatWebSocket
 
         public void Connect()
         {
-            string url = "ws://gi455chatserver.et.r.appspot.com/";
-
+            //string url = "ws://gi455chatserver.et.r.appspot.com/";
+            string url = "ws://127.0.0.1:8080/";
             InternalConnect(url);
         }
 
@@ -57,6 +71,8 @@ namespace ChatWebSocket
             {
                 if (OnConnectionSuccess != null)
                     OnConnectionSuccess("Success");
+
+                CreateRoom("RoomTest");
             }
             else
             {
@@ -79,6 +95,19 @@ namespace ChatWebSocket
                 return false;
 
             return ws.ReadyState == WebSocketState.Open;
+        }
+
+        public void CreateRoom(string roomName)
+        {
+            var eventData = new ServerCreateRoomEventData();
+
+            eventData.Event = "createRoom";
+            eventData.Data.roomName = roomName;
+
+            string toJson = JsonUtility.ToJson(eventData);
+            Debug.Log(toJson);
+
+            ws.Send(toJson);
         }
 
         public void Send(string data)
