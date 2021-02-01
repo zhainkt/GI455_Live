@@ -2,13 +2,19 @@
   "name": "zhainserver",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "private": true,
+  "main": "app.js",
+  "engines": {
+    "node": "14.x.x"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "deploy": "gcloud app deploy",
+    "start": "node app.js"
   },
   "author": "Zhain",
   "license": "ISC",
   "dependencies": {
+    "express": "^4.17.1",
     "ws": "^7.4.2"
   }
 }

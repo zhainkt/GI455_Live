@@ -1,10 +1,8 @@
-var websocket = require('ws');
+const app = require('express')();
+const server = require('http').Server(app);
+const websocket = require('ws');
 
-var callbackInitServer = ()=>{
-    console.log("Zhain Server is running.");
-}
-
-var wss = new websocket.Server({port:5500}, callbackInitServer);
+const wss = new websocket.Server({server});
 
 var wsList = [];
 
@@ -12,6 +10,8 @@ wss.on("connection", (ws)=>{
 
     console.log("client connected.");
     wsList.push(ws);
+
+    ws.send("id:"+wsList.length);
 
     ws.on("message", (data)=>{
         console.log("send from client :"+ data);
@@ -23,6 +23,10 @@ wss.on("connection", (ws)=>{
         wsList = ArrayRemove(wsList, ws);
     });
 });
+
+server.listen(process.env.PORT || 8080, ()=>{
+    console.log("Server start at port "+server.address().port);
+})
 
 function ArrayRemove(arr, value)
 {

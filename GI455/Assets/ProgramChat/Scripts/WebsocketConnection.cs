@@ -3,22 +3,22 @@ using System.Collections.Generic;
 using UnityEngine;
 using WebSocketSharp;
 
+
 namespace ProgramChat
 {
     public class WebsocketConnection : MonoBehaviour
     {
+
         private WebSocket websocket;
 
         // Start is called before the first frame update
         void Start()
         {
-            websocket = new WebSocket("ws://127.0.0.1:5500/");
+            websocket = new WebSocket("ws://127.0.0.1:25500/");
 
             websocket.OnMessage += OnMessage;
 
             websocket.Connect();
-
-            //websocket.Send("I'm coming here.");
         }
 
         // Update is called once per frame
@@ -26,16 +26,13 @@ namespace ProgramChat
         {
             if(Input.GetKeyDown(KeyCode.Return))
             {
-                if(websocket.ReadyState == WebSocketState.Open)
-                {
-                    websocket.Send("Random number : " + Random.Range(0, 999999));
-                }
+                websocket.Send("Number : " + Random.Range(0, 99999));
             }
         }
 
-        private void OnDestroy()
+        public void OnDestroy()
         {
-            if(websocket != null)
+            if (websocket != null)
             {
                 websocket.Close();
             }
@@ -43,7 +40,7 @@ namespace ProgramChat
 
         public void OnMessage(object sender, MessageEventArgs messageEventArgs)
         {
-            Debug.Log("Receive msg : " + messageEventArgs.Data);
+            Debug.Log("Message from server : " + messageEventArgs.Data);
         }
     }
 }
