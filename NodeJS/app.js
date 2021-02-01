@@ -10,9 +10,7 @@ wss.on("connection", (ws)=>{
 
     console.log("client connected.");
     wsList.push(ws);
-
-    ws.send("id:"+wsList.length);
-
+    
     ws.on("message", (data)=>{
         console.log("send from client :"+ data);
         Boardcast(data);

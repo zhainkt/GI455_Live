@@ -2,46 +2,106 @@
 using System.Collections.Generic;
 using UnityEngine;
 using WebSocketSharp;
+using System;
 
-
-namespace ProgramChat
+namespace ChatWebSocket
 {
-    public class WebsocketConnection : MonoBehaviour
+    public class WebSocketConnection : MonoBehaviour
     {
 
-        private WebSocket websocket;
+        private WebSocket ws;
 
-        // Start is called before the first frame update
-        void Start()
+        public delegate void DelegateHandler(string msg);
+
+        public event DelegateHandler OnConnectionSuccess;
+        public event DelegateHandler OnConnectionFail;
+        public event DelegateHandler OnReceive;
+
+        private bool isConnection;
+
+        public void Connect(string ip, int port)
         {
-            websocket = new WebSocket("ws://127.0.0.1:25500/");
+            string url = $"ws://{ip}:{port}/";
 
-            websocket.OnMessage += OnMessage;
-
-            websocket.Connect();
+            InternalConnect(url);
         }
 
-        // Update is called once per frame
-        void Update()
+        public void Connect()
         {
-            if(Input.GetKeyDown(KeyCode.Return))
+            string url = "ws://gi455chatserver.et.r.appspot.com/";
+
+            InternalConnect(url);
+        }
+
+        private void InternalConnect(string url)
+        {
+            if (isConnection)
+                return;
+
+            isConnection = true;
+
+            ws = new WebSocket(url);
+
+            ws.OnMessage += OnMessage;
+
+            ws.Connect();
+
+            StartCoroutine(WaitingConnectionState());
+        }
+
+        private IEnumerator WaitingConnectionState()
+        {
+            yield return new WaitForSeconds(1.0f);
+
+            if(ws.ReadyState == WebSocketState.Open)
             {
-                websocket.Send("Number : " + Random.Range(0, 99999));
+                if (OnConnectionSuccess != null)
+                    OnConnectionSuccess("Success");
             }
-        }
-
-        public void OnDestroy()
-        {
-            if (websocket != null)
+            else
             {
-                websocket.Close();
+                if (OnConnectionFail != null)
+                    OnConnectionFail("Fail");
             }
+
+            isConnection = false;
         }
 
-        public void OnMessage(object sender, MessageEventArgs messageEventArgs)
+        public void Disconnect()
         {
-            Debug.Log("Message from server : " + messageEventArgs.Data);
+            if (ws != null)
+                ws.Close();
+        }
+
+        public bool IsConnected()
+        {
+            if (ws == null)
+                return false;
+
+            return ws.ReadyState == WebSocketState.Open;
+        }
+
+        public void Send(string data)
+        {
+            if (!IsConnected())
+                return;
+
+            ws.Send(data);
+        }
+
+        private void OnDestroy()
+        {
+            Debug.Log("OnDestroy");
+            if (ws != null)
+                ws.Close();
+        }
+
+        private void OnMessage(object sender, MessageEventArgs messageEventArgs)
+        {
+            if (OnReceive != null)
+                OnReceive(messageEventArgs.Data);
         }
     }
 }
+
 
