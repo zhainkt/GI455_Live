@@ -1,6 +1,5 @@
 const app = require('express')();
 const server = require('http').Server(app);
-const { isRegExp } = require('util');
 const websocket = require('ws');
 const wss = new websocket.Server({server});
 
@@ -22,7 +21,7 @@ class WebSocketData{
     }
 }
 
-let roomDataList = [];
+var roomDataList = [];
 
 wss.on("connection", (ws)=>{
 
@@ -45,11 +44,11 @@ wss.on("connection", (ws)=>{
 
 server.listen(process.env.PORT || 8080, ()=>{
     console.log("Server start at port "+server.address().port);
-})
+});
 
 function Event(ws, receive)
 {
-    let jsonObj = JSON.parse(receive);
+    var jsonObj = JSON.parse(receive);
     var event = jsonObj.Event;
     var data = jsonObj.Data;
     
@@ -64,11 +63,17 @@ function Event(ws, receive)
         case "joinRoom":
         {
             console.log("JointRoom");
+            JoinRoom(ws, data.roomName);
             break;
         }
         case "leaveRoom":
         {
             LeaveRoom(ws);
+            break;
+        }
+        case "message":
+        {
+            UpdateData(ws, receive);
             break;
         }
         default:{}
@@ -77,12 +82,12 @@ function Event(ws, receive)
 
 function CreateRoom(ws, roomName)
 {
-    let wsData = new WebSocketData(ws, "");
-    let roomID = require('udid')('roomID');
-    let roomData = new RoomData(roomID, roomName, [wsData]);
-    let isExistRoom = false;
+    var wsData = new WebSocketData(ws, "");
+    var roomID = require('udid')('roomID');
+    var roomData = new RoomData(roomID, roomName, [wsData]);
+    var isExistRoom = false;
 
-    for(let i = 0; i < roomDataList.length; i++)
+    for(var i = 0; i < roomDataList.length; i++)
     {
         if(roomDataList[i].roomName == roomName)
         {
@@ -91,16 +96,16 @@ function CreateRoom(ws, roomName)
         }
     }
 
-    let eventData = {
-        event:"createRoom",
-        msg:""
+    var eventData = {
+        Event:"createRoom",
+        Msg:""
     }
 
-    eventData.msg = isExistRoom ? "fail" : "success";
+    eventData.Msg = isExistRoom ? "fail" : "success";
     
-    if(eventData.msg == "success"){
+    if(eventData.Msg == "success"){
         roomDataList.push(roomData);
-        let lastIndex = roomDataList.length-1;
+        var lastIndex = roomDataList.length-1;
         console.log("RoomID : " + roomDataList[lastIndex].roomID);
         console.log("RoomName : " + roomDataList[lastIndex].roomName);
         console.log("Current Player : " + roomDataList[lastIndex].wsList.length);
@@ -109,11 +114,77 @@ function CreateRoom(ws, roomName)
     ws.send(JSON.stringify(eventData)); 
 }
 
-function LeaveRoom(ws)
+function JoinRoom(ws, roomName)
 {
+    var indexRoom = -1;
+    for(let i = 0; i < roomDataList.length; i++)
+    {
+        if(roomDataList[i].roomName == roomName)
+        {
+            indexRoom = i;
+            break;
+        }
+    }
+
+    let eventData = {
+        Event:"joinRoom",
+        Msg:""
+    }
+
+    if(indexRoom == -1)
+    {
+        console.log("Room : " + roomName + " is not found.");
+        eventData.Msg = "not exist";
+    }
+    else
+    {
+        var isFoundWsInRoom = false; 
+        for(var i = 0; i < roomDataList[indexRoom].wsList.length; i++)
+        {
+            if(roomDataList[indexRoom].wsList[i] == ws)
+            {
+                isFoundWsInRoom = true;
+                break
+            }
+        }
+
+        if(isFoundWsInRoom)
+        {
+            eventData.Msg = "already in room";
+        }
+        else
+        {
+            let wsData = new WebSocketData(ws, "");
+            roomDataList[indexRoom].wsList.push(wsData);
+            eventData.Msg = "success";
+        }
+    }
+
+    ws.send(JSON.stringify(eventData));
+}
+
+function UpdateData(ws, data)
+{
+    console.log("UpdateData");
     for(let i = 0; i < roomDataList.length; i++)
     {
         for(let j = 0; j < roomDataList[i].wsList.length; j++)
+        {
+            if(ws == roomDataList[i].wsList[j].ws)
+            {
+                console.log("send from client :" + data);
+                roomDataList[i].wsList[j].data = data;
+                break;
+            }
+        }
+    }
+}
+
+function LeaveRoom(ws)
+{
+    for(var i = 0; i < roomDataList.length; i++)
+    {
+        for(var j = 0; j < roomDataList[i].wsList.length; j++)
         {
             if(ws == roomDataList[i].wsList[j].ws)
             {
@@ -124,7 +195,14 @@ function LeaveRoom(ws)
                     roomDataList.splice(i, 1);
                 }
 
+                var eventData = {
+                    Event:"joinRoom",
+                    Msg:""
+                }
+
                 console.log("client leave room");
+
+                ws.send(JSON.stringify(eventData));
                 break;
             }
         }
@@ -140,23 +218,29 @@ function ArrayRemove(arr, value)
 
 function Boardcast()
 {
-    console.log("Current Room : "+roomDataList.length);
+    //console.log("Current Room : "+roomDataList.length);
 
-    for(let i = 0; i < roomDataList.length; i++)
+    for(var i = 0; i < roomDataList.length; i++)
     {
-        for(let j = 0; j < roomDataList[i].wsList.length; j++)
+        for(var j = 0; j < roomDataList[i].wsList.length; j++)
         {
-            let ws = roomDataList[i].wsList[j].ws;
-            let data = roomDataList[i].wsList[j].data;
+            for(var k = 0; k < roomDataList[i].wsList.length; k++)
+            {
+                var ws = roomDataList[i].wsList[k].ws;
+                var data = roomDataList[i].wsList[j].data;
+                
+                if(data != "")
+                {
+                    console.log("send to client");
+                    ws.send(data);
+                }
+            }
             roomDataList[i].wsList[j].data = "";
-            
-            if(data != "")
-                ws.send(data);
         }
     }
 }
 
 setInterval(()=>{
     Boardcast();
-}, 1000);
+}, millInterval);
 

@@ -4,13 +4,16 @@ using UnityEngine;
 using UnityEngine.UI;
 using System;
 
-namespace ChatWebSocket
+namespace ChatWebSocket_Room
 {
     public class UIManager : MonoBehaviour
     {
         public enum UIRootType
         {
             Connection,
+            Lobby,
+            CreateRoom,
+            JoinRoom,
             Chat
         }
 
@@ -24,13 +27,23 @@ namespace ChatWebSocket
         public GameObject uiRootConnection;
         public GameObject uiRootChat;
         public GameObject uiRootPopUp;
+        public GameObject uiRootLobby;
+        public GameObject uiRootCreateRoom;
+        public GameObject uiRootJoinRoom;
 
         public Button btnConnectToServer;
         public Button btnPopupOK;
         public Button btnSendMessage;
+        public Button btnSelectCreateRoom;
+        public Button btnSelectJoinRoom;
+        public Button btnCreateRoom;
+        public Button btnJoinRoom;
+        public Button btnLeaveRoom;
 
         public InputField inputFieldName;
         public InputField inputMessage;
+        public InputField inputCreateRoomName;
+        public InputField inputJoinRoomName;
 
         public Text textPopUpMsg;
         public Text textReceiveMsgOwner;
@@ -55,13 +68,23 @@ namespace ChatWebSocket
             btnConnectToServer.onClick.AddListener(BTN_ConnectToServer);
             btnSendMessage.onClick.AddListener(BTN_SendMessage);
             btnPopupOK.onClick.AddListener(BTN_PopupOK);
+            btnSelectCreateRoom.onClick.AddListener(BTN_SelectCreateRoom);
+            btnSelectJoinRoom.onClick.AddListener(BTN_SelectJoinRoom);
+            btnCreateRoom.onClick.AddListener(BTN_CreateRoom);
+            btnJoinRoom.onClick.AddListener(BTN_JoinRoom);
 
             webSocket.OnConnectionSuccess += OnConnectionSuccess;
             webSocket.OnConnectionFail += OnConnectionFail;
-            webSocket.OnReceive += OnReceiveMessage;
+            webSocket.OnReceiveMessage += OnReceiveMessage;
+            webSocket.OnCreateRoom += OnCreateRoom;
+            webSocket.OnJoinRoom += OnJoinRoom;
+            webSocket.OnLeaveRoom += OnLeaveRoom;
 
             uiRootDict.Add(UIRootType.Connection, uiRootConnection);
             uiRootDict.Add(UIRootType.Chat, uiRootChat);
+            uiRootDict.Add(UIRootType.Lobby, uiRootLobby);
+            uiRootDict.Add(UIRootType.CreateRoom, uiRootCreateRoom);
+            uiRootDict.Add(UIRootType.JoinRoom, uiRootJoinRoom);
 
             OpenUIRoot(UIRootType.Connection);
 
@@ -95,6 +118,32 @@ namespace ChatWebSocket
             webSocket.Connect();
         }
 
+        void BTN_SelectCreateRoom()
+        {
+            OpenUIRoot(UIRootType.CreateRoom);
+        }
+
+        void BTN_SelectJoinRoom()
+        {
+            OpenUIRoot(UIRootType.JoinRoom);
+        }
+
+        void BTN_CreateRoom()
+        {
+            if (!webSocket.IsConnected())
+                return;
+
+            webSocket.CreateRoom(inputCreateRoomName.text);
+        }
+
+        void BTN_JoinRoom()
+        {
+            if (!webSocket.IsConnected())
+                return;
+
+            webSocket.JoinRoom(inputJoinRoomName.text);
+        }
+
         void BTN_SendMessage()
         {
             if(!string.IsNullOrEmpty(inputMessage.text))
@@ -112,6 +161,7 @@ namespace ChatWebSocket
 
         public void ShowPopup(string msg)
         {
+            Debug.Log("Show popup");
             uiRootPopUp.SetActive(true);
             textPopUpMsg.text = msg;
         }
@@ -123,12 +173,9 @@ namespace ChatWebSocket
                 uiRoot.Value.SetActive(false);
             }
 
-            uiRootDict[uiRootType].SetActive(true);
-        }
+            Debug.Log("OpenUIRoot : " + uiRootType);
 
-        private void OnConnectionSuccess(string msg)
-        {
-            OpenUIRoot(UIRootType.Chat);
+            uiRootDict[uiRootType].SetActive(true);
         }
 
         private void SendMessageData(string message)
@@ -141,6 +188,11 @@ namespace ChatWebSocket
             webSocket.Send(convertToJson);
         }
 
+        private void OnConnectionSuccess(string msg)
+        {
+            OpenUIRoot(UIRootType.Lobby);
+        }
+
         private void OnConnectionFail(string msg)
         {
             ShowPopup(msg);
@@ -148,7 +200,11 @@ namespace ChatWebSocket
 
         private void OnReceiveMessage(string msg)
         {
-            Debug.Log("OnReceive : " + msg);
+
+            if (string.IsNullOrEmpty(msg))
+                return;
+
+            Debug.Log("OnReceiveMessage : " + msg);
 
             MessageData msgData = JsonUtility.FromJson<MessageData>(msg);
 
@@ -161,6 +217,39 @@ namespace ChatWebSocket
                 receiveStrOwner += "\n";
                 receiveStrOther += "<color="+ msgData.colorCode + ">" + msgData.name + " :</color> " + msgData.message + "\n";
             }
+        }
+
+        private void OnCreateRoom(string msg)
+        {
+            if(msg == "success")
+            {
+                Debug.Log("Create room success.");
+                OpenUIRoot(UIRootType.Chat);
+            }
+            else
+            {
+                Debug.Log("Create room fail.");
+                ShowPopup(msg);
+            }
+        }
+
+        private void OnJoinRoom(string msg)
+        {
+            if (msg == "success")
+            {
+                Debug.Log("Join room success.");
+                OpenUIRoot(UIRootType.Chat);
+            }
+            else
+            {
+                ShowPopup(msg);
+            }
+        }
+
+        private void OnLeaveRoom(string msg)
+        {
+            Debug.Log("Leave room success.");
+            OpenUIRoot(UIRootType.Lobby);
         }
     }
 }

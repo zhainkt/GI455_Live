@@ -4,8 +4,9 @@ const websocket = require('ws');
 
 const wss = new websocket.Server({server});
 
-wss.on("connection", (ws)=>{
+var wsList = [];
 
+wss.on("connection", (ws)=>{
     console.log("client connected.");
     wsList.push(ws);
     
@@ -16,20 +17,20 @@ wss.on("connection", (ws)=>{
 
     ws.on("close", ()=>{
         console.log("client disconnected.");
-        wsList = ArrayRemove(wsList, ws);
+        for(var i = 0; i < wsList.length; i++)
+        {
+            if(wsList[i] == ws)
+            {
+                wsList.splice(i, 1);
+                break;
+            }
+        }
     });
 });
 
 server.listen(process.env.PORT || 8080, ()=>{
     console.log("Server start at port "+server.address().port);
-})
-
-function ArrayRemove(arr, value)
-{
-    return arr.filter((element)=>{
-        return element != value;
-    });
-}
+});
 
 function Boardcast(data)
 {

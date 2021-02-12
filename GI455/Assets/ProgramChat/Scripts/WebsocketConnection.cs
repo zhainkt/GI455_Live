@@ -3,56 +3,52 @@ using System.Collections.Generic;
 using UnityEngine;
 using WebSocketSharp;
 using System;
+using UnityEngine.UI;
 
 namespace ChatWebSocket
 {
     public class WebSocketConnection : MonoBehaviour
     {
-        [System.Serializable]
-        public struct RoomData
+
+        struct MessageData
         {
-            public string roomName;
+            public string username;
+            public string message;
+
+            public MessageData(string username, string message)
+            {
+                this.username = username;
+                this.message = message;
+            }
         }
 
-        [System.Serializable]
-        public struct ServerCreateRoomEventData
-        {
-            public string Event;
-            public RoomData Data;
-        }
+        public GameObject rootConnection;
+        public GameObject rootMessenger;
 
+        public InputField inputUsername;
+        public InputField inputText;
+        public Text sendText;
+        public Text receiveText;
         
-
         private WebSocket ws;
 
-        public delegate void DelegateHandler(string msg);
+        private string tempMessageString;
 
-        public event DelegateHandler OnConnectionSuccess;
-        public event DelegateHandler OnConnectionFail;
-        public event DelegateHandler OnReceive;
-
-        private bool isConnection;
-
-        public void Connect(string ip, int port)
+        public void Start()
         {
-            string url = $"ws://{ip}:{port}/";
+            //Set default is connection UI;
+            rootConnection.SetActive(true);
+            rootMessenger.SetActive(false);
+        }
 
-            InternalConnect(url);
+        private void Update()
+        {
+            UpdateNotifyMessage();
         }
 
         public void Connect()
         {
-            //string url = "ws://gi455chatserver.et.r.appspot.com/";
             string url = "ws://127.0.0.1:8080/";
-            InternalConnect(url);
-        }
-
-        private void InternalConnect(string url)
-        {
-            if (isConnection)
-                return;
-
-            isConnection = true;
 
             ws = new WebSocket(url);
 
@@ -60,27 +56,9 @@ namespace ChatWebSocket
 
             ws.Connect();
 
-            StartCoroutine(WaitingConnectionState());
-        }
-
-        private IEnumerator WaitingConnectionState()
-        {
-            yield return new WaitForSeconds(1.0f);
-
-            if(ws.ReadyState == WebSocketState.Open)
-            {
-                if (OnConnectionSuccess != null)
-                    OnConnectionSuccess("Success");
-
-                CreateRoom("RoomTest");
-            }
-            else
-            {
-                if (OnConnectionFail != null)
-                    OnConnectionFail("Fail");
-            }
-
-            isConnection = false;
+            //Change UI to messenger after connected.
+            rootConnection.SetActive(false);
+            rootMessenger.SetActive(true);
         }
 
         public void Disconnect()
@@ -88,47 +66,52 @@ namespace ChatWebSocket
             if (ws != null)
                 ws.Close();
         }
-
-        public bool IsConnected()
+        
+        public void SendMessage()
         {
-            if (ws == null)
-                return false;
-
-            return ws.ReadyState == WebSocketState.Open;
-        }
-
-        public void CreateRoom(string roomName)
-        {
-            var eventData = new ServerCreateRoomEventData();
-
-            eventData.Event = "createRoom";
-            eventData.Data.roomName = roomName;
-
-            string toJson = JsonUtility.ToJson(eventData);
-            Debug.Log(toJson);
-
-            ws.Send(toJson);
-        }
-
-        public void Send(string data)
-        {
-            if (!IsConnected())
+            if (string.IsNullOrEmpty(inputText.text) || ws.ReadyState != WebSocketState.Open)
                 return;
 
-            ws.Send(data);
+            MessageData messageData = new MessageData(inputUsername.text,
+                                                        inputText.text);
+
+            string toJsonStr = JsonUtility.ToJson(messageData);
+            
+            ws.Send(toJsonStr);
+            inputText.text = "";
         }
 
         private void OnDestroy()
         {
-            Debug.Log("OnDestroy");
-            if (ws != null)
-                ws.Close();
+            Disconnect();
+        }
+
+        private void UpdateNotifyMessage()
+        {
+            if (string.IsNullOrEmpty(tempMessageString) == false)
+            {
+                MessageData receiveMessageData = JsonUtility.FromJson<MessageData>(tempMessageString);
+
+                if (receiveMessageData.username == inputUsername.text)
+                {
+                    sendText.text += "<color=red>" + receiveMessageData.username + "</color> : " + receiveMessageData.message + "\n";
+                    receiveText.text += "\n";
+                }
+                else
+                {
+                    sendText.text += "\n";
+                    receiveText.text += receiveMessageData.username + " : " + receiveMessageData.message + "\n";
+                }
+
+                tempMessageString = "";
+            }
         }
 
         private void OnMessage(object sender, MessageEventArgs messageEventArgs)
         {
-            if (OnReceive != null)
-                OnReceive(messageEventArgs.Data);
+            Debug.Log(messageEventArgs.Data);
+
+            tempMessageString = messageEventArgs.Data;
         }
     }
 }
