@@ -110,7 +110,7 @@ namespace LobbyRoomExample
         {
             for (int i = 0; i < roomList.Count; i++)
             {
-                if (roomList[i].roomName == roomName)
+                if (roomList[i].RoomName == roomName)
                 {
                     return roomList[i];
                 }

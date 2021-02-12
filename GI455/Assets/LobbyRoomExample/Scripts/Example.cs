@@ -65,7 +65,7 @@ public class Example : MonoBehaviour
 
             for(int i = 0; i < roomList.Count; i++)
             {
-                GUILayout.TextArea(roomList[i].roomName);
+                GUILayout.TextArea(roomList[i].RoomName);
             }
         }
         else if(state == State.CreateRoom)
@@ -88,7 +88,7 @@ public class Example : MonoBehaviour
         }
         else if(state == State.InRoom)
         {
-            GUILayout.TextArea("Room : [" + LobbyManager.instance.CurrentRoom.roomName + "]");
+            GUILayout.TextArea("Room : [" + LobbyManager.instance.CurrentRoom.RoomName + "]");
 
             if(GUILayout.Button("LeaveRoom"))
             {
