@@ -22,6 +22,18 @@ namespace ChatWebSocket
             }
         }
 
+        struct SocketEvent
+        {
+            public string eventName;
+            public string roomName;//data
+
+            public SocketEvent(string eventName, string roomName)
+            {
+                this.eventName = eventName;
+                this.roomName = roomName;
+            }
+        }
+
         public GameObject rootConnection;
         public GameObject rootMessenger;
 
@@ -56,9 +68,30 @@ namespace ChatWebSocket
 
             ws.Connect();
 
+
+            StartCoroutine(CreateAndLeave());
+
             //Change UI to messenger after connected.
             rootConnection.SetActive(false);
             rootMessenger.SetActive(true);
+        }
+
+        IEnumerator CreateAndLeave()
+        {
+            SocketEvent socketEvent = new SocketEvent("CreateRoom", "TestRoom01");
+
+            string toJsonStr = JsonUtility.ToJson(socketEvent);
+
+            ws.Send(toJsonStr);
+
+            yield return new WaitForSeconds(3.0f);
+
+            socketEvent.eventName = "LeaveRoom";
+            socketEvent.roomName = "";
+
+            toJsonStr = JsonUtility.ToJson(socketEvent);
+
+            ws.Send(toJsonStr);
         }
 
         public void Disconnect()
@@ -111,7 +144,7 @@ namespace ChatWebSocket
         {
             Debug.Log(messageEventArgs.Data);
 
-            tempMessageString = messageEventArgs.Data;
+            //tempMessageString = messageEventArgs.Data;
         }
     }
 }
