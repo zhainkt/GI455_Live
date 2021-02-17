@@ -1,10 +1,48 @@
 const app = require('express')();
 const server = require('http').Server(app);
 const websocket = require('ws');
-
 const wss = new websocket.Server({server});
+var udid = require('udid');
 
-var wsList = [];
+const admin = require('firebase-admin');
+//const serviceAcc = require('./gi455-305013-firebase-adminsdk-x33n5-c2af095e6a.json');
+/*admin.initializeApp({
+    //credential: admin.credential.applicationDefault()
+    credential: admin.credential.cert(serviceAcc),
+    databaseURL: "https://gi455chatserver-default-rtdb.firebaseio.com"
+});*/
+admin.initializeApp();
+
+const db = admin.firestore();
+
+const setData = async function() {
+    const citiesRef = db.collection('students');
+
+    fs.readFile('./student.csv', 'utf8', function(err, data) {
+        let textLine = data.split(/\n/);
+        //var result = textLine.replace(/\r/,'');
+        for(let i = 0; i < textLine.length; i++)
+        {
+            let clearText = textLine[i].replace(/\r/,'');
+            let splitData = clearText.split(',');
+            let id = splitData[0];
+            let name = splitData[1];
+            let email = splitData[2];
+    
+            citiesRef.doc(id).set({
+                name: name,
+                email: email
+            });
+        }
+        
+    });
+}
+
+server.listen(process.env.PORT || 8080, ()=>{
+    console.log("Server start at port "+server.address().port);
+});
+
+//var wsList = [];
 var roomList = [];
 /*
 {
@@ -16,136 +54,132 @@ var roomList = [];
 wss.on("connection", (ws)=>{
     
     //Lobby
-    {
-        console.log("client connected.");
-        //Reception
-        ws.on("message", (data)=>{
-            console.log("send from client :"+ data);
+    console.log("client connected.");
+    //Reception
+    ws.on("message", (data)=>{
+        
+        EventOrder(ws,data);
+    });
 
-            var toJsonObj = JSON.parse(data);
+    ws.on("close", ()=>{
 
-            if(toJsonObj.eventName == "CreateRoom")//CreateRoom
-            {
-                var isFoundRoom = false;
+    });
+});
 
-                for(var i = 0; i < roomList.length; i++)
-                {
-                    if(roomList[i].roomName == toJsonObj.roomName)
-                    {
-                        isFoundRoom = true;
-                        break;
-                    }
-                }
-
-                if(isFoundRoom == true)
-                {
-                    //Callback to client : create room fail
-                    ws.send("CreateRoomFail");
-
-                    console.log("client create room fail.");
-                }
-                else
-                {
-                    //Callback to client : create room success
-                    var newRoom = {
-                        roomName: toJsonObj.roomName,
-                        wsList: []
-                    }
-
-                    newRoom.wsList.push(ws);
+let EventOrder = (ws, data)=>{
     
-                    roomList.push(newRoom);
+    let toJsonObj = {
+        eventName:"",
+        data:{}
+    }
+    toJsonObj = JSON.parse(data);
 
-                    ws.send("CreateRoomSuccess");
+    let _eventName = toJsonObj.eventName;
+    let _data = toJsonObj.data;
+    
+    switch(_eventName)
+    {
+        case "RequestToken" :
+        {
+            RequestToken(_data.studentID,(result)=>{
 
-                    console.log("client create room success.");
-                }
+                toJsonObj.data = result;
 
-                console.log("client request CreateRoom ["+toJsonObj.roomName+"]");
-                
-            }
-            else if(toJsonObj.eventName == "JoinRoom")//JoinRoom
-            {
-                console.log("client request JoinRoom");
-            }
-            else if(toJsonObj.eventName == "LeaveRoom")
-            {
-                var isLeaveSuccess = false;
+                ws.send(JSON.stringify(toJsonObj));
+            });
+            break;
+        }
+        case "GetStudentData":
+        {
+            GetStudentData(_data.studentID, (result)=>{
+                toJsonObj.data = result;
 
-                for(var i = 0; i < roomList.length; i++)
-                {
-                    for(var j = 0; j < roomList[i].wsList.length; j++)
-                    {
-                        if(ws == roomList[i].wsList[j])
-                        {
-                            roomList[i].wsList.splice(j, 1);
+                ws.send(JSON.stringify(toJsonObj));
+            });
+            break;
+        }
+    }
+}
 
-                            if(roomList[i].wsList.length <= 0)
-                            {
-                                roomList.splice(i, 1);
-                            }
-                            isLeaveSuccess = true;
-                            break;
-                        }
-                    }
-                }
+const RequestToken = async (studentID ,callback)=>{
 
-                if(isLeaveSuccess)
-                {
-                    ws.send("LeaveRoomSuccess");
+    const studentRef = db.collection('students').doc(studentID);
 
-                    console.log("leave room success");
-                }
-                else
-                {
-                    ws.send("LeaveRoomFail");
+    const getDoc = await studentRef.get();
 
-                    console.log("leave room fail");
-                }
-            }
-        });
+    let result = {
+        status: false,
+        message: "",
+        data:{}
     }
 
+    if (!getDoc.exists) {
 
-    /*wsList.push(ws);
-    
-    ws.on("message", (data)=>{
-        console.log("send from client :"+ data);
-        Boardcast(data);
-    });
-    */
-    ws.on("close", ()=>{
-        console.log("client disconnected.");
+        result.status = false;
+        result.message = "Can't found data from your student ID";
+        callback(result);
+    } else {
 
-        for(var i = 0; i < roomList.length; i++)
+        let name = getDoc.data().name;
+        let token = getDoc.data().token;
+        if(token === undefined)
         {
-            for(var j = 0; j < roomList[i].wsList.length; j++)
-            {
-                if(ws == roomList[i].wsList[j])
-                {
-                    roomList[i].wsList.splice(j, 1);
+            let newToken = udid(name);
+            const tokenRef = db.collection('token');
+            const timeStamp = admin.firestore.Timestamp.now();
+            const date = new Date(timeStamp * 1000);
+            const dateFormat = date.toLocaleString("th-TH", {timeZoneName: "short"});
+            await tokenRef.doc(newToken).set({
+                unix:timeStamp,
+                dateTime:dateFormat
+            }).then(studentRef.update({
+                token:newToken
+            }));
 
-                    if(roomList[i].wsList.length <= 0)
-                    {
-                        roomList.splice(i, 1);
-                    }
-
-                    break;
-                }
-            }
+            token = newToken;
         }
-    });
-});
 
-server.listen(process.env.PORT || 8080, ()=>{
-    console.log("Server start at port "+server.address().port);
-});
+        result.status = true;
+        result.message = "success";
+        result.data = token;
+        callback(result);
+    }
+
+    //Example 
+    /*RequestToken('test', (result)=>{
+        console.log(result);
+    });*/
+}
+
+const GetStudentData = async(studentID, callback)=>{
+
+    const studentRef = db.collection('students').doc(studentID);
+
+    const getDoc = await studentRef.get();
+
+    let result = {
+        status: false,
+        message: "",
+        data:{}
+    }
+
+    if (!getDoc.exists) {
+        result.status = false;
+        result.message = "Can't found data from your student ID";
+        callback(result);
+    } else {
+        result.status = true;
+        result.message = "success";
+        result.data = getDoc.data();
+        callback(result);
+    }
+};
 
 function Boardcast(data)
 {
-    for(var i = 0; i < wsList.length; i++)
+    /*for(var i = 0; i < wsList.length; i++)
     {
         wsList[i].send(data);
-    }
+    }*/
 }
 

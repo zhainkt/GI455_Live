@@ -48,6 +48,7 @@ namespace ChatWebSocket_Room
         public Text textPopUpMsg;
         public Text textReceiveMsgOwner;
         public Text textReceiveMsgOther;
+        public Text textRoom;
 
         private Dictionary<UIRootType, GameObject> uiRootDict = new Dictionary<UIRootType, GameObject>();
 
@@ -61,6 +62,26 @@ namespace ChatWebSocket_Room
 
         MessageData messageDataSend;
 
+        public string studentID = "test";
+
+        private void OnGUI()
+        {
+            if(webSocket.IsConnected())
+            {
+                studentID = GUILayout.TextField(studentID);
+
+                if (GUILayout.Button("RequestToken"))
+                {
+                    webSocket.RequestToken(studentID);
+                }
+
+                if(GUILayout.Button("GetStudentData"))
+                {
+                    webSocket.GetStudentData(studentID);
+                }
+            }
+        }
+
         // Start is called before the first frame update
         void Start()
         {
@@ -72,6 +93,7 @@ namespace ChatWebSocket_Room
             btnSelectJoinRoom.onClick.AddListener(BTN_SelectJoinRoom);
             btnCreateRoom.onClick.AddListener(BTN_CreateRoom);
             btnJoinRoom.onClick.AddListener(BTN_JoinRoom);
+            btnLeaveRoom.onClick.AddListener(BTN_LeaveRoom);
 
             webSocket.OnConnectionSuccess += OnConnectionSuccess;
             webSocket.OnConnectionFail += OnConnectionFail;
@@ -142,6 +164,14 @@ namespace ChatWebSocket_Room
                 return;
 
             webSocket.JoinRoom(inputJoinRoomName.text);
+        }
+
+        void BTN_LeaveRoom()
+        {
+            if (!webSocket.IsConnected())
+                return;
+
+            webSocket.LeaveRoom();
         }
 
         void BTN_SendMessage()
@@ -221,28 +251,30 @@ namespace ChatWebSocket_Room
 
         private void OnCreateRoom(string msg)
         {
-            if(msg == "success")
-            {
-                Debug.Log("Create room success.");
-                OpenUIRoot(UIRootType.Chat);
-            }
-            else
+            if(msg == "fail")
             {
                 Debug.Log("Create room fail.");
                 ShowPopup(msg);
+            }
+            else
+            {
+                Debug.Log("Create room success.");
+                textRoom.text = "Room : [" + msg + "]";
+                OpenUIRoot(UIRootType.Chat);
             }
         }
 
         private void OnJoinRoom(string msg)
         {
-            if (msg == "success")
+            if (msg == "fail")
             {
-                Debug.Log("Join room success.");
-                OpenUIRoot(UIRootType.Chat);
+                ShowPopup(msg);
             }
             else
             {
-                ShowPopup(msg);
+                Debug.Log("Join room success.");
+                textRoom.text = "Room : [" + msg + "]";
+                OpenUIRoot(UIRootType.Chat);
             }
         }
 

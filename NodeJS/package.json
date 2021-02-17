@@ -15,7 +15,8 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.17.1",
+    "firebase-admin": "^9.5.0",
     "udid": "^0.1.4",
-    "ws": "^7.4.2"
+    "ws": "^7.4.3"
   }
 }

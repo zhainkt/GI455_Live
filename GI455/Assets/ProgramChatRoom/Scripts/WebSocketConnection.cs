@@ -15,13 +15,6 @@ namespace ChatWebSocket_Room
         }
 
         [System.Serializable]
-        public struct ServerCreateRoomEventData
-        {
-            public string Event;
-            public RoomData Data;
-        }
-
-        [System.Serializable]
         public struct MessageEventData
         {
             public string Event;
@@ -29,10 +22,32 @@ namespace ChatWebSocket_Room
         }
 
         [System.Serializable]
-        public struct EventServer
+        public struct StudentData
         {
-            public string Event;
-            public string Msg;
+            public string studentID;
+
+            public StudentData(string studentID)
+            {
+                this.studentID = studentID;
+            }
+        }
+
+        [System.Serializable]
+        public class WSEvent
+        {
+            public string eventName;
+        }
+
+        [System.Serializable]
+        public class EventServer : WSEvent
+        {
+            public string data;
+        }
+
+        [System.Serializable]
+        public class EventStudent : WSEvent
+        {
+            public StudentData data;
         }
 
         private WebSocket ws;
@@ -63,8 +78,8 @@ namespace ChatWebSocket_Room
 
         public void Connect()
         {
-            //string url = "ws://gi455chatserver.et.r.appspot.com/";
-            string url = "ws://127.0.0.1:8080/";
+            string url = "ws://gi455-305013.an.r.appspot.com/";
+            //string url = "ws://127.0.0.1:8080/";
             InternalConnect(url);
         }
 
@@ -118,10 +133,10 @@ namespace ChatWebSocket_Room
 
         public void CreateRoom(string roomName)
         {
-            var eventData = new ServerCreateRoomEventData();
+            var eventData = new EventServer();
 
-            eventData.Event = "createRoom";
-            eventData.Data.roomName = roomName;
+            eventData.eventName = "CreateRoom";
+            eventData.data = roomName;
 
             string toJson = JsonUtility.ToJson(eventData);
 
@@ -130,13 +145,45 @@ namespace ChatWebSocket_Room
 
         public void JoinRoom(string roomName)
         {
-            ServerCreateRoomEventData eventData;
+            EventServer eventData = new EventServer();
 
-            eventData.Event = "joinRoom";
-            eventData.Data.roomName = roomName;
+            eventData.eventName = "JoinRoom";
+            eventData.data = roomName;
 
             string toJson = JsonUtility.ToJson(eventData);
 
+            ws.Send(toJson);
+        }
+
+        public void LeaveRoom()
+        {
+            EventServer eventData = new EventServer(); ;
+
+            eventData.eventName = "LeaveRoom";
+            eventData.data = "";
+
+            string toJson = JsonUtility.ToJson(eventData);
+
+            ws.Send(toJson);
+        }
+
+        public void RequestToken(string studentID)
+        {
+            EventStudent eventData = new EventStudent();
+            eventData.eventName = "RequestToken";
+            eventData.data = new StudentData(studentID);
+
+            string toJson = JsonUtility.ToJson(eventData);
+            ws.Send(toJson);
+        }
+
+        public void GetStudentData(string studentID)
+        {
+            EventStudent eventData = new EventStudent();
+            eventData.eventName = "GetStudentData";
+            eventData.data = new StudentData(studentID);
+
+            string toJson = JsonUtility.ToJson(eventData);
             ws.Send(toJson);
         }
 
@@ -173,33 +220,39 @@ namespace ChatWebSocket_Room
         private void NotifyCallback(string callbackData)
         {
             Debug.Log("OnMessage : " + callbackData);
+
             EventServer recieveEvent = JsonUtility.FromJson<EventServer>(callbackData);
 
-            switch (recieveEvent.Event)
+            switch (recieveEvent.eventName)
             {
-                case "createRoom":
+                case "CreateRoom":
                     {
                         if (OnCreateRoom != null)
-                            OnCreateRoom(recieveEvent.Msg);
+                            OnCreateRoom(recieveEvent.data);
                         break;
                     }
-                case "joinRoom":
+                case "JoinRoom":
                     {
                         if (OnJoinRoom != null)
-                            OnJoinRoom(recieveEvent.Msg);
+                            OnJoinRoom(recieveEvent.data);
                         break;
                     }
-                case "leaveRoom":
+                case "LeaveRoom":
                     {
                         if (OnLeaveRoom != null)
-                            OnLeaveRoom(recieveEvent.Msg);
+                            OnLeaveRoom(recieveEvent.data);
                         break;
                     }
-                case "message":
+                case "Message":
                     {
-                        Debug.Log("message : "+ recieveEvent.Msg);
+                        Debug.Log("message : "+ recieveEvent.data);
                         if (OnReceiveMessage != null)
-                            OnReceiveMessage(recieveEvent.Msg);
+                            OnReceiveMessage(recieveEvent.data);
+                        break;
+                    }
+                case "RequestToken":
+                    {
+                        Debug.Log("message : " + recieveEvent.data);
                         break;
                     }
             }
