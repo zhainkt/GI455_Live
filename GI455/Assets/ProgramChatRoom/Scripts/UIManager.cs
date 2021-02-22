@@ -10,6 +10,8 @@ namespace ChatWebSocket_Room
     {
         public enum UIRootType
         {
+            Login,
+            Register,
             Connection,
             Lobby,
             CreateRoom,
@@ -24,6 +26,8 @@ namespace ChatWebSocket_Room
             public string colorCode;
         }
 
+        public GameObject uiRootLogin;
+        public GameObject uiRootRegister;
         public GameObject uiRootConnection;
         public GameObject uiRootChat;
         public GameObject uiRootPopUp;
@@ -40,6 +44,10 @@ namespace ChatWebSocket_Room
         public Button btnJoinRoom;
         public Button btnLeaveRoom;
 
+        public Button btnLogin;
+        public Button btnToRegister;
+        public Button btnRegister;
+
         public InputField inputFieldName;
         public InputField inputMessage;
         public InputField inputCreateRoomName;
@@ -49,6 +57,14 @@ namespace ChatWebSocket_Room
         public Text textReceiveMsgOwner;
         public Text textReceiveMsgOther;
         public Text textRoom;
+        public Text textName;
+
+        public InputField inputLoginUserID;
+        public InputField inputLoginPassword;
+        public InputField inputRegisterUserID;
+        public InputField inputRegisterPassword;
+        public InputField inputRegisterRePassword;
+        public InputField inputRegisterName;
 
         private Dictionary<UIRootType, GameObject> uiRootDict = new Dictionary<UIRootType, GameObject>();
 
@@ -79,6 +95,11 @@ namespace ChatWebSocket_Room
                 {
                     webSocket.GetStudentData(studentID);
                 }
+
+                /*if(GUILayout.Button("AddMoney"))
+                {
+                    webSocket.AddMoney();
+                }*/
             }
         }
 
@@ -94,6 +115,9 @@ namespace ChatWebSocket_Room
             btnCreateRoom.onClick.AddListener(BTN_CreateRoom);
             btnJoinRoom.onClick.AddListener(BTN_JoinRoom);
             btnLeaveRoom.onClick.AddListener(BTN_LeaveRoom);
+            btnLogin.onClick.AddListener(BTN_Login);
+            btnRegister.onClick.AddListener(Btn_Register);
+            btnToRegister.onClick.AddListener(Btn_ToRegister);
 
             webSocket.OnConnectionSuccess += OnConnectionSuccess;
             webSocket.OnConnectionFail += OnConnectionFail;
@@ -101,7 +125,11 @@ namespace ChatWebSocket_Room
             webSocket.OnCreateRoom += OnCreateRoom;
             webSocket.OnJoinRoom += OnJoinRoom;
             webSocket.OnLeaveRoom += OnLeaveRoom;
+            webSocket.OnLogin += OnLogin;
+            webSocket.OnRegister += OnRegister;
 
+            uiRootDict.Add(UIRootType.Login, uiRootLogin);
+            uiRootDict.Add(UIRootType.Register, uiRootRegister);
             uiRootDict.Add(UIRootType.Connection, uiRootConnection);
             uiRootDict.Add(UIRootType.Chat, uiRootChat);
             uiRootDict.Add(UIRootType.Lobby, uiRootLobby);
@@ -189,6 +217,47 @@ namespace ChatWebSocket_Room
             uiRootPopUp.SetActive(false);
         }
 
+        void BTN_Login()
+        {
+            if(string.IsNullOrWhiteSpace(inputLoginUserID.text) ||
+                string.IsNullOrWhiteSpace(inputLoginPassword.text))
+            {
+                ShowPopup("Please input all field.");
+            }
+            else
+            {
+                webSocket.Login(inputLoginUserID.text, inputLoginPassword.text);
+            }
+        }
+
+        void Btn_ToRegister()
+        {
+            OpenUIRoot(UIRootType.Register);
+        }
+
+        void Btn_Register()
+        {
+            if (string.IsNullOrWhiteSpace(inputRegisterName.text) ||
+                string.IsNullOrWhiteSpace(inputRegisterPassword.text) ||
+                string.IsNullOrWhiteSpace(inputRegisterRePassword.text) ||
+                string.IsNullOrWhiteSpace(inputRegisterName.text))
+
+            {
+                ShowPopup("Please input all field.");
+            }
+            else
+            {
+                if (inputRegisterPassword.text == inputRegisterRePassword.text)
+                {
+                    webSocket.Register(inputRegisterUserID.text, inputRegisterPassword.text, inputRegisterName.text);
+                }
+                else
+                {
+                    ShowPopup("Password not match.");
+                }
+            }
+        }
+
         public void ShowPopup(string msg)
         {
             Debug.Log("Show popup");
@@ -206,6 +275,14 @@ namespace ChatWebSocket_Room
             Debug.Log("OpenUIRoot : " + uiRootType);
 
             uiRootDict[uiRootType].SetActive(true);
+
+            if(uiRootType == UIRootType.Lobby)
+            {
+                receiveStrOther = "";
+                receiveStrOwner = "";
+                textReceiveMsgOther.text = "";
+                textReceiveMsgOwner.text = "";
+            }
         }
 
         private void SendMessageData(string message)
@@ -215,12 +292,12 @@ namespace ChatWebSocket_Room
 
             string convertToJson = JsonUtility.ToJson(messageDataSend);
 
-            webSocket.Send(convertToJson);
+            webSocket.SendMessage(convertToJson);
         }
 
         private void OnConnectionSuccess(string msg)
         {
-            OpenUIRoot(UIRootType.Lobby);
+            OpenUIRoot(UIRootType.Login);
         }
 
         private void OnConnectionFail(string msg)
@@ -234,7 +311,7 @@ namespace ChatWebSocket_Room
             if (string.IsNullOrEmpty(msg))
                 return;
 
-            Debug.Log("OnReceiveMessage : " + msg);
+            //Debug.Log("OnReceiveMessage : " + msg);
 
             MessageData msgData = JsonUtility.FromJson<MessageData>(msg);
 
@@ -282,6 +359,32 @@ namespace ChatWebSocket_Room
         {
             Debug.Log("Leave room success.");
             OpenUIRoot(UIRootType.Lobby);
+        }
+
+        private void OnLogin(string msg)
+        {
+            if(msg == "fail")
+            {
+                ShowPopup("Login fail. Please try again.");
+            }
+            else
+            {
+                textName.text = msg;
+                username = msg;
+                OpenUIRoot(UIRootType.Lobby);
+            }
+        }
+
+        private void OnRegister(string msg)
+        {
+            if(msg == "fail")
+            {
+                ShowPopup("Register fail. Please try again.");
+            }
+            else
+            {
+                OpenUIRoot(UIRootType.Login);
+            }
         }
     }
 }

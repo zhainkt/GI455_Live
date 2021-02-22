@@ -2,6 +2,13 @@ const app = require('express')();
 const server = require('http').Server(app);
 const websocket = require('ws');
 const wss = new websocket.Server({server});
+const sqlite = require('sqlite3').verbose();
+
+var database = new sqlite.Database('./database/chatDB.db', sqlite.OPEN_CREATE | sqlite.OPEN_READWRITE, (err)=>{
+    if(err) throw err;
+
+    console.log("Connected to database.");
+});
 
 server.listen(process.env.PORT || 8080, ()=>{
     console.log("Server start at port "+server.address().port);
@@ -103,7 +110,51 @@ wss.on("connection", (ws)=>{
         {
             //============= Home work ================
             // Implementation JoinRoom event when have request from client.
-            
+            var indexRoom = -1;
+            var roomName = toJsonObj.data;
+            for(let i = 0; i < roomList.length; i++)
+            {
+                if(roomList[i].roomName == roomName)
+                {
+                    indexRoom = i;
+                    break;
+                }
+            }
+
+            let eventData = {
+                eventName:"JoinRoom",
+                data:""
+            }
+
+            if(indexRoom == -1)
+            {
+                console.log("Room : " + roomName + " is not found.");
+                eventData.data = "fail";
+            }
+            else
+            {
+                var isFoundWsInRoom = false; 
+                for(var i = 0; i < roomList[indexRoom].wsList.length; i++)
+                {
+                    if(roomList[indexRoom].wsList[i] == ws)
+                    {
+                        isFoundWsInRoom = true;
+                        break
+                    }
+                }
+
+                if(isFoundWsInRoom)
+                {
+                    eventData.data = "fail";
+                }
+                else
+                {
+                    roomList[indexRoom].wsList.push(ws);
+                    eventData.data = roomName;
+                }
+            }
+
+            ws.send(JSON.stringify(eventData));
             //================= Hint =================
             //roomList[i].wsList.push(ws);
 
@@ -168,6 +219,140 @@ wss.on("connection", (ws)=>{
                 console.log("leave room fail");
             }
         }
+        else if(toJsonObj.eventName == "SendMessage")//Send Message
+        {
+            Boardcast(ws, toJsonObj.data);
+        }
+        else if(toJsonObj.eventName == "Login"){
+            
+            var splitData = toJsonObj.data.split('#');
+            var userID = splitData[0];
+            var password = splitData[1];
+            var sqlSelect = `SELECT * FROM UserData WHERE UserID='${userID}' AND Password='${password}'`;
+
+            var callbackMsg = {
+                eventName:"Login",
+                data:""
+            }
+
+            database.all(sqlSelect, (err, rows)=>{
+                if(err)
+                {
+                    callbackMsg.data = "fail";
+                }
+                else
+                {
+                    if(rows.length > 0)
+                    {
+                        callbackMsg.data = rows[0].Name;
+                    }
+                    else
+                    {
+                        callbackMsg.data = "fail";
+                    }
+                    
+                }
+
+                var toJsonStr = JSON.stringify(callbackMsg);
+                ws.send(toJsonStr);
+            });
+
+        }
+        else if(toJsonObj.eventName == "Register"){
+            
+            var splitData = toJsonObj.data.split('#');
+            var userID = splitData[0];
+            var password = splitData[1];
+            var name = splitData[2];
+            var sqlInsert = `INSERT INTO UserData (UserID, Password, Name) VALUES ('${userID}', '${password}', '${name}')`;
+
+            var callbackMsg = {
+                eventName:"Register",
+                data:""
+            }
+
+            database.all(sqlInsert, (err, rows)=>{
+                if(err)
+                {
+                    callbackMsg.data = "fail";
+                }
+                else
+                {
+                    callbackMsg.data = "success";
+                }
+
+                
+                var toJsonStr = JSON.stringify(callbackMsg);
+                ws.send(toJsonStr);
+            });
+        }
+        else if(toJsonObj.eventName == "AddMoney")
+        {
+
+            var userID = toJsonObj.userID;
+            var addMoney = toJsonObj.addMoney;
+            
+            database.all("SELECT Money FROM UserData WHERE UserID='"+userID+"'", (err,rows)=>{
+                if(err)
+                {
+                    var callbackMsg = {
+                        eventName:"AddMoney",
+                        status:"fail",
+                        data:0,
+                    }
+        
+                    var toJsonStr = JSON.stringify(callbackMsg);
+                    ws.send(toJsonStr);
+                }
+                else
+                {
+                    console.log(rows);
+                    if(rows.length > 0)
+                    {
+                        var currentMoney = rows[0].Money;
+                        currentMoney += addMoney;
+        
+                        database.all("UPDATE UserData SET Money='"+currentMoney+"' WHERE UserID='"+userID+"'", (err,rows)=>{
+        
+                            if(err)
+                            {
+                                var callbackMsg = {
+                                    eventName:"AddMoney",
+                                    status:"fail",
+                                    data:0
+                                }
+                    
+                                var toJsonStr = JSON.stringify(callbackMsg);
+                                ws.send(toJsonStr);
+                            }
+                            else
+                            {
+                                var callbackMsg = {
+                                    eventName:"AddMoney",
+                                    status:"success",
+                                    data:currentMoney,
+                                }
+                    
+                                var toJsonStr = JSON.stringify(callbackMsg);
+                                ws.send(toJsonStr);
+                            }
+        
+                        });
+                    }
+                    else
+                    {
+                        var callbackMsg = {
+                            eventName:"AddMoney",
+                            status:"fail",
+                            data:0
+                        }
+            
+                        var toJsonStr = JSON.stringify(callbackMsg);
+                        ws.send(toJsonStr);
+                    }
+                }
+            });
+        }
     });
 
 
@@ -202,11 +387,30 @@ wss.on("connection", (ws)=>{
     });
 });
 
-function Boardcast(data)
+function Boardcast(ws, message)
 {
-    /*for(var i = 0; i < wsList.length; i++)
+    var selectRoomIndex = -1;
+
+    for(var i = 0; i < roomList.length; i++)
     {
-        wsList[i].send(data);
-    }*/
+        for(var j = 0; j < roomList[i].wsList.length; j++)
+        {
+            if(ws == roomList[i].wsList[j])
+            {
+                selectRoomIndex = i;
+                break;
+            }
+        }
+    }
+
+    for(var i = 0 ; i < roomList[selectRoomIndex].wsList.length; i++)
+    {
+        var callbackMsg = {
+            eventName:"SendMessage",
+            data:message
+        }
+
+        roomList[selectRoomIndex].wsList[i].send(JSON.stringify(callbackMsg));
+    }
 }
 

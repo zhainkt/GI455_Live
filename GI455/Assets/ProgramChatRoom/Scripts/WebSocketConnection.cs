@@ -22,6 +22,18 @@ namespace ChatWebSocket_Room
         }
 
         [System.Serializable]
+        public class EventServer
+        {
+            public string eventName;
+        }
+
+        [System.Serializable]
+        public class EventStudent : EventServer
+        {
+            public string studentID;
+        }
+
+        [System.Serializable]
         public struct StudentData
         {
             public string studentID;
@@ -33,26 +45,32 @@ namespace ChatWebSocket_Room
         }
 
         [System.Serializable]
-        public class WSEvent
+        public class EventAddMoney
         {
             public string eventName;
+            public string userID;
+            public int addMoney;
         }
 
         [System.Serializable]
-        public class EventServer : WSEvent
+        public class EventCallbackAddMoney
         {
+            //public string eventName;
+            public string status;
+            public int data;
+        }
+
+        [System.Serializable]
+        public class EventCallbackGeneral
+        {
+            public string eventName;
             public string data;
-        }
-
-        [System.Serializable]
-        public class EventStudent : WSEvent
-        {
-            public StudentData data;
         }
 
         private WebSocket ws;
 
         public delegate void DelegateHandler(string msg);
+        public delegate void DelegateHandlerAddMoney(string status, int money);
 
         public event DelegateHandler OnConnectionSuccess;
         public event DelegateHandler OnConnectionFail;
@@ -60,6 +78,10 @@ namespace ChatWebSocket_Room
         public event DelegateHandler OnCreateRoom;
         public event DelegateHandler OnJoinRoom;
         public event DelegateHandler OnLeaveRoom;
+        public event DelegateHandler OnLogin;
+        public event DelegateHandler OnRegister;
+
+        public event DelegateHandlerAddMoney OnAddMoney;
 
         private bool isConnection;
 
@@ -78,8 +100,8 @@ namespace ChatWebSocket_Room
 
         public void Connect()
         {
-            string url = "ws://gi455-305013.an.r.appspot.com/";
-            //string url = "ws://127.0.0.1:8080/";
+            //string url = "ws://gi455-305013.an.r.appspot.com/";
+            string url = "ws://127.0.0.1:8080/";
             InternalConnect(url);
         }
 
@@ -133,7 +155,7 @@ namespace ChatWebSocket_Room
 
         public void CreateRoom(string roomName)
         {
-            var eventData = new EventServer();
+            EventCallbackGeneral eventData = new EventCallbackGeneral();
 
             eventData.eventName = "CreateRoom";
             eventData.data = roomName;
@@ -145,7 +167,7 @@ namespace ChatWebSocket_Room
 
         public void JoinRoom(string roomName)
         {
-            EventServer eventData = new EventServer();
+            EventCallbackGeneral eventData = new EventCallbackGeneral();
 
             eventData.eventName = "JoinRoom";
             eventData.data = roomName;
@@ -157,7 +179,7 @@ namespace ChatWebSocket_Room
 
         public void LeaveRoom()
         {
-            EventServer eventData = new EventServer(); ;
+            EventCallbackGeneral eventData = new EventCallbackGeneral(); ;
 
             eventData.eventName = "LeaveRoom";
             eventData.data = "";
@@ -171,7 +193,7 @@ namespace ChatWebSocket_Room
         {
             EventStudent eventData = new EventStudent();
             eventData.eventName = "RequestToken";
-            eventData.data = new StudentData(studentID);
+            eventData.studentID = studentID;
 
             string toJson = JsonUtility.ToJson(eventData);
             ws.Send(toJson);
@@ -181,20 +203,53 @@ namespace ChatWebSocket_Room
         {
             EventStudent eventData = new EventStudent();
             eventData.eventName = "GetStudentData";
-            eventData.data = new StudentData(studentID);
+            eventData.studentID = studentID;
 
             string toJson = JsonUtility.ToJson(eventData);
             ws.Send(toJson);
         }
 
-        public void Send(string data)
+        public void Login(string userId, string password)
+        {
+            EventCallbackGeneral eventData = new EventCallbackGeneral();
+            eventData.eventName = "Login";
+            eventData.data = userId + "#" + password;
+
+            string toJson = JsonUtility.ToJson(eventData);
+            ws.Send(toJson);
+        }
+
+        public void Register(string userId, string password, string name)
+        {
+            EventCallbackGeneral eventData = new EventCallbackGeneral();
+            eventData.eventName = "Register";
+            eventData.data = userId + "#" + password+"#"+name;
+
+            string toJson = JsonUtility.ToJson(eventData);
+            ws.Send(toJson);
+        }
+
+        public void AddMoney()
+        {
+            EventAddMoney eventData = new EventAddMoney(); ;
+
+            eventData.eventName = "AddMoney";
+            eventData.userID = "test0005";
+            eventData.addMoney = 100;
+
+            string toJson = JsonUtility.ToJson(eventData);
+
+            ws.Send(toJson);
+        }
+
+        public void SendMessage(string data)
         {
             if (!IsConnected())
                 return;
 
-            MessageEventData msgEventData;
-            msgEventData.Event = "message";
-            msgEventData.Msg = data;
+            EventCallbackGeneral msgEventData = new EventCallbackGeneral();
+            msgEventData.eventName = "SendMessage";
+            msgEventData.data = data;
 
             string toJson = JsonUtility.ToJson(msgEventData);
 
@@ -223,36 +278,62 @@ namespace ChatWebSocket_Room
 
             EventServer recieveEvent = JsonUtility.FromJson<EventServer>(callbackData);
 
+            Debug.Log(recieveEvent.eventName);
+
             switch (recieveEvent.eventName)
             {
                 case "CreateRoom":
                     {
+                        EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<EventCallbackGeneral>(callbackData);
                         if (OnCreateRoom != null)
-                            OnCreateRoom(recieveEvent.data);
+                            OnCreateRoom(receiveEventGeneral.data);
                         break;
                     }
                 case "JoinRoom":
                     {
+                        EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<EventCallbackGeneral>(callbackData);
                         if (OnJoinRoom != null)
-                            OnJoinRoom(recieveEvent.data);
+                            OnJoinRoom(receiveEventGeneral.data);
                         break;
                     }
                 case "LeaveRoom":
                     {
+                        EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<EventCallbackGeneral>(callbackData);
                         if (OnLeaveRoom != null)
-                            OnLeaveRoom(recieveEvent.data);
+                            OnLeaveRoom(receiveEventGeneral.data);
                         break;
                     }
-                case "Message":
+                case "SendMessage":
                     {
-                        Debug.Log("message : "+ recieveEvent.data);
+                        EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<EventCallbackGeneral>(callbackData);
                         if (OnReceiveMessage != null)
-                            OnReceiveMessage(recieveEvent.data);
+                            OnReceiveMessage(receiveEventGeneral.data);
                         break;
                     }
                 case "RequestToken":
                     {
-                        Debug.Log("message : " + recieveEvent.data);
+                        //Debug.Log("message : " + (string)recieveEvent.data);
+                        break;
+                    }
+                case "Login":
+                    {
+                        EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<EventCallbackGeneral>(callbackData);
+                        if (OnLogin != null)
+                            OnLogin(receiveEventGeneral.data);
+                        break;
+                    }
+                case "Register":
+                    {
+                        EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<EventCallbackGeneral>(callbackData);
+                        if (OnRegister != null)
+                            OnRegister(receiveEventGeneral.data);
+                        break;
+                    }
+                case "AddMoney":
+                    {
+                        EventCallbackAddMoney receiveAddMoney = JsonUtility.FromJson<EventCallbackAddMoney>(callbackData);
+                        if (OnAddMoney != null)
+                            OnAddMoney(receiveAddMoney.status, receiveAddMoney.data);
                         break;
                     }
             }
