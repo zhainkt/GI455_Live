@@ -96,10 +96,10 @@ namespace ChatWebSocket_Room
                     webSocket.GetStudentData(studentID);
                 }
 
-                /*if(GUILayout.Button("AddMoney"))
+                if(GUILayout.Button("RequestExamInfo"))
                 {
-                    webSocket.AddMoney();
-                }*/
+                    webSocket.RequestExamInfo(studentID);
+                }
             }
         }
 

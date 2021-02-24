@@ -5,13 +5,13 @@ const wss = new websocket.Server({server});
 var udid = require('udid');
 
 const admin = require('firebase-admin');
-const serviceAcc = require('./gi455-305013-firebase-adminsdk-x33n5-c2af095e6a.json');
+/*const serviceAcc = require('./gi455-305013-firebase-adminsdk-x33n5-c2af095e6a.json');
 admin.initializeApp({
     //credential: admin.credential.applicationDefault()
     credential: admin.credential.cert(serviceAcc),
     databaseURL: "https://gi455chatserver-default-rtdb.firebaseio.com"
-});
-//admin.initializeApp();
+});*/
+admin.initializeApp();
 
 const db = admin.firestore();
 
@@ -51,21 +51,69 @@ var roomList = [];
 }
 */
 
+var wsList = [];
+
 wss.on("connection", (ws)=>{
     
-    //Lobby
     console.log("client connected.");
-    //Reception
+
+    wsList.push({
+        ws:ws,
+        timeRes:0
+    });
+
     ws.on("message", (data)=>{
+    
+        const notSpam = CheckTimeStamp(ws);
+
+        if(notSpam){
+            console.log(data);
+            EventOrder(ws,data);
+        }else{
+            
+            let result = {
+                eventName:"SpamDetection",
+                message:"Server kick. Because your spam send message to server."
+            }
+
+            ws.send(JSON.stringify(result));
+            ws.close();
+
+            console.log("Spam Detected.");
+        }
         
-        console.log(data);
-        EventOrder(ws,data);
     });
 
     ws.on("close", ()=>{
-
+        for(var i = 0 ; i < wsList.length; i++){
+            if(wsList[i].ws == ws){
+                wsList.splice(i,1);
+            }
+        }
     });
 });
+
+function CheckTimeStamp(ws){
+
+    const timeStamp = admin.firestore.Timestamp.now();
+
+    for(var i = 0; i < wsList.length; i++){
+        if(wsList[i].ws == ws){
+            let sec = timeStamp;
+            let compareSec = sec - wsList[i].timeRes;
+            wsList[i].timeRes = sec;
+            if(compareSec >= 2){
+                return true;
+            }else{
+                return false;
+            }
+
+            break;
+        }
+    }
+
+    return false;
+}
 
 let EventOrder = (ws, data)=>{
     
@@ -77,9 +125,28 @@ let EventOrder = (ws, data)=>{
         {
             let toJsonObj = JSON.parse(data);
 
-            RequestToken(toJsonObj.studentID,(result)=>{
+            RequestToken(toJsonObj.studentID,(resToken)=>{
 
-                ws.send(JSON.stringify(result));
+                if(resToken.status === false){
+
+                    ws.send(JSON.stringify(resToken));
+
+                }else{
+                    RequestPropLink(resToken.token, (resProp)=>{
+
+                        if(resProp.status === false){
+                            ws.send(JSON.stringify(resProp));
+                        }else{
+                            let result = {
+                                eventName:jsonEvent.eventName,
+                                token:resToken.token,
+                                link:resProp.data
+                            }
+
+                            ws.send(JSON.stringify(result));
+                        }    
+                    });
+                }
             });
             break;
         }
@@ -95,57 +162,74 @@ let EventOrder = (ws, data)=>{
         }
         case "RequestExamInfo":
         {
+            let toJsonObj = JSON.parse(data);
+
+            RequestExamInfo(toJsonObj.token, (result)=>{
+                ws.send(JSON.stringify(result));
+            });
             break;
         }
     }
 }
 
 const RequestToken = async (studentID ,callback)=>{
-
-    const studentRef = db.collection('students').doc(studentID);
-
-    const getDoc = await studentRef.get();
-
     let result = {
         eventName:"RequestToken",
         status: false,
         message: "",
     }
 
-    if (!getDoc.exists) {
-
+    if(studentID == undefined || studentID == ""){
         result.status = false;
-        result.message = "Can't found data from your student ID";
+        result.message = "Request fail your studentID is empty string.";
         callback(result);
-    } else {
+    }else{
+        const studentRef = db.collection('students').doc(studentID);
+        const getDoc = await studentRef.get();
 
-        let name = getDoc.data().name;
-        let token = getDoc.data().token;
-        if(token === undefined)
-        {
-            let newToken = udid(name);
-            const tokenRef = db.collection('token');
-            const timeStamp = admin.firestore.Timestamp.now();
-            const date = new Date(timeStamp * 1000);
-            const dateFormat = date.toLocaleString("th-TH", {timeZoneName: "short"});
-            const prop = RandomCharFromList(["A1","A2","A3","A4","A5"]);
-            await tokenRef.doc(newToken).set({
-                unix:timeStamp,
-                dateTime:dateFormat,
-                prop:prop
-            }).then(studentRef.update({
-                token:newToken
-            }));
+        if (!getDoc.exists) {
 
-            token = newToken;
+            result.status = false;
+            result.message = "Can't found data from your student ID";
+            callback(result);
+        } else {
+    
+            let name = getDoc.data().name;
+            let token = getDoc.data().token;
+            if(token === undefined)
+            {
+                let newToken = udid(name);
+                const tokenRef = db.collection('token');
+                const proposionRef = db.collection('proposion');
+    
+                const timeStamp = admin.firestore.Timestamp.now();
+                const date = new Date(timeStamp * 1000);
+                const dateFormat = date.toLocaleString("th-TH", {timeZoneName: "short"});
+                
+                const propDoc = await proposionRef.doc('allprop').get();
+    
+                const propData = propDoc.data();
+                const propArr = propData.data;
+                var randomProp = RandomCharFromList(propArr);
+
+                await tokenRef.doc(newToken).set({
+                    unix:timeStamp,
+                    dateTime:dateFormat,
+                    prop:randomProp
+                }).then(studentRef.update({
+                    token:newToken
+                }));
+    
+                token = newToken;
+            }
+    
+            result.status = true;
+            result.message = "success";
+            result.token = token;
+            callback(result);
         }
-
-        result.status = true;
-        result.message = "success";
-        result.token = token;
-        callback(result);
     }
-}
+};
 
 const GetStudentData = async(studentID, callback)=>{
 
@@ -185,37 +269,143 @@ const GetStudentData = async(studentID, callback)=>{
     }
 };
 
-const A5 = async(token, callback)=>{ 
-    const tokenRef = db.collection('token').doc(token);
-
-    const getDoc = await tokenRef.get();
-
-    var result = {};
-
-    if(!getDoc.exists){
-        result.status = false;
-    }else{
-        var docData = getDoc.data();
-
-        result.status = true;
-
-        if(docData.data == undefined || docData.data === ""){
-            
-            let a5Data = GetA5();
-            
-            tokenRef.update({
-                data: a5Data.data,
-                answer: a5Data.answer
-            });
-
-            result.data = a5Data.data;
-        }else{
-
-            result.data = docData.data;
-        }
+const RequestPropLink = async(token, callback)=>{
+    let result = {
+        eventName:"RequestToken",
+        status: false,
+        message: "",
     }
 
-    callback(result);
+    if(token == undefined || token == ""){
+        result.status = false;
+        result.message = "Request fail your token is empty string.";
+        callback(result);
+    }else{
+        const tokenRef = db.collection('token').doc(token);
+        const tokenDoc = await tokenRef.get();
+
+        if (!tokenDoc.exists) {
+            result.status = false;
+            result.message = "Token is not found.";
+            callback(result);
+        }else{
+
+            const tokenData = tokenDoc.data();
+            const proposionRef = db.collection('proposion').doc(tokenData.prop);
+            const propDoc = await proposionRef.get();
+
+            if(!propDoc.exists){
+                result.status = false;
+                result.message = "Proposition ["+tokenData.prop+"] is not found.";
+                callback(result);
+            }else{
+
+                result.status = true;
+                result.message = "success";
+                result.data = propDoc.data().link;
+                callback(result);
+            }
+        }
+    }
+};
+
+const RequestExamInfo = async(token, callback)=>{
+    let result = {
+        eventName:"RequestExamInfo",
+        status: false,
+    }
+
+    if(token == undefined || token == ""){
+        result.status = false;
+        result.message = "Request fail your token is empty string.";
+        callback(result);
+    }else{
+        const tokenRef = db.collection('token').doc(token);
+        const tokenDoc = await tokenRef.get();
+
+        if (!tokenDoc.exists) {
+            result.status = false;
+            result.message = "Token is not found.";
+            callback(result);
+        }else{
+
+            const tokenData = tokenDoc.data();
+
+            if(tokenData.data === undefined && tokenData.answer === undefined)
+            {
+                if(tokenData.prop === "A1"){
+
+                    let a1Data = GetA1();
+                    tokenRef.update({
+                        data:a1Data.data,
+                        answer:a1Data.answer,
+                    });
+
+                    result.status = true;
+                    result.data = a1Data.data;
+    
+                    callback(result);
+    
+                }else if(tokenData.prop === "A2"){
+    
+                    let a2Data = GetA2();
+                    tokenRef.update({
+                        data:a2Data.data,
+                        answer:a2Data.answer,
+                    });
+
+                    result.status = true;
+                    result.data = a2Data.data;
+    
+                    callback(result);
+
+                }else if(tokenData.prop === "A3"){
+    
+                    let a3Data = GetA3();
+                    tokenRef.update({
+                        data:a3Data.data,
+                        answer:a3Data.answer,
+                    });
+
+                    result.status = true;
+                    result.data = a3Data.data;
+    
+                    callback(result);
+                    
+                }else if(tokenData.prop === "A4"){
+    
+                    let a4Data = GetA4();
+                    tokenRef.update({
+                        data:a4Data.data,
+                        answer:a4Data.answer,
+                    });
+
+                    result.status = true;
+                    result.data = a4Data.data;
+    
+                    callback(result);
+
+                }else if(tokenData.prop === "A5"){
+
+                    let a5Data = GetA5();
+                    tokenRef.update({
+                        data: a5Data.data,
+                        answer: a5Data.answer
+                    });
+    
+                    result.status = true;
+                    result.data = a5Data.data;
+    
+                    callback(result);
+                }
+
+            }else{
+                result.status = true;
+                result.data = tokenData.data;
+                callback(result);
+            }
+        }
+    }
 }
 
 function GenerateHashFromWord(_word, _prefix){
@@ -290,17 +480,182 @@ function GetWordFromHash(data)
     return answer;
 }
 
-function GetA5(){
+function GetA1(){
+    let str = "";
+    let lengthArr = 1000;
 
+    for(let i = 0; i < lengthArr; i++)
+    {
+        if(i == lengthArr-1)
+        {
+            str += RandomCharAlphabet();
+        }
+        else
+        {
+            str += RandomCharAlphabet()+",";
+        }
+    }
+
+    let splitStr = str.split(',');
+    let answer = "";
+    for(let i = splitStr.length-1; i >= 0; i--)
+    {
+        if(i == 0)
+        {
+            answer += splitStr[i];
+        }
+        else
+        {
+            answer += splitStr[i] +",";
+        }
+    }
+
+
+    let result = {
+        data:str,
+        answer:answer
+    }
+    
+    return result;
+}
+
+function GetA2(){
+    let str = "";
+    let lengthArr = 1000;
+
+    for(let i = 0; i < lengthArr; i++)
+    {
+        if(i == lengthArr-1)
+        {
+            str += RandomCharAlphabet();
+        }
+        else
+        {
+            str += RandomCharAlphabet()+",";
+        }
+    }
+
+    let splitStr = str.split(',');
+    let answer = "";
+    for(let i = 0 ; i < splitStr.length; i++)
+    {
+        let isEven = i % 2 == 0;
+        if(!isEven)
+        {
+            if(answer == "")
+            {
+                answer += splitStr[i];
+            }
+            else
+            {
+                answer += ","+splitStr[i];
+            }
+            
+        }
+    }
+
+    let result = {
+        data:str,
+        answer:answer
+    }
+    
+    return result;
+}
+
+function GetA3()
+{
     let arrInt = [];
-    let arrStr = [];
-    let lengthArr = 50;
+    var str = "";
+    let lengthArr = 1000;
+    let answerSum = 0;
 
     for(let i = 0; i < lengthArr; i++)
     {
         let random = RandomRange(1, 999);
         arrInt.push(random);
-        arrStr.push(random.toString());
+
+        if(i == lengthArr-1)
+        {
+            str += ""+random.toString();
+        }else{
+            str += random.toString()+",";
+        }
+
+        answerSum += random;
+    }
+
+    let result = {
+        data:str,
+        answer:answerSum.toString()
+    }
+    
+    return result;
+}
+
+function GetA4(){
+
+    var str = "";
+    let lengthArr = 1000;
+
+    for(let i = 0; i < lengthArr; i++)
+    {
+        let randomChar = RandomChar("@#$%&abcdefghijklm@#$%&nopqrstuvwxyz01234567@#$%&89ABCDEFGHIJKLMNOPQRSTUVWX@#$%&YZ1234567890")
+        if(str == "")
+        {
+            str += randomChar;
+        }
+        else
+        {
+            str += ","+randomChar;
+        }
+    }
+
+    let split = str.split(',');
+    let answer = "";
+
+    for(let i = 0; i < split.length; i++)
+    {
+        let _str = split[i];
+
+        if(_str != "@" && _str != "#" && _str != "$" &&
+            _str != "%" && _str != "&")
+        {
+            if(answer == "")
+            {
+                answer += _str;
+            }
+            else
+            {
+                answer += ","+_str;
+            }
+        }
+    }
+
+    let result = {
+        data:str,
+        answer:answer
+    }
+
+    return result;
+}
+
+function GetA5(){
+
+    let arrInt = [];
+    var str = "";
+    let lengthArr = 1000;
+
+    for(let i = 0; i < lengthArr; i++)
+    {
+        let random = RandomRange(1, 999);
+        arrInt.push(random);
+
+        if(i == lengthArr-1)
+        {
+            str += ""+random.toString();
+        }else{
+            str += random.toString()+",";
+        }
     }
 
     let answerSum = 0;
@@ -320,8 +675,8 @@ function GetA5(){
     }
 
     let result = {
-        data:arrStr,
-        answer:answerSum
+        data:str,
+        answer:answerSum.toString()
     }
 
     return result;

@@ -34,6 +34,12 @@ namespace ChatWebSocket_Room
         }
 
         [System.Serializable]
+        public class EventToken : EventServer
+        {
+            public string token;
+        }
+
+        [System.Serializable]
         public struct StudentData
         {
             public string studentID;
@@ -66,6 +72,8 @@ namespace ChatWebSocket_Room
             public string eventName;
             public string data;
         }
+
+        
 
         private WebSocket ws;
 
@@ -100,8 +108,8 @@ namespace ChatWebSocket_Room
 
         public void Connect()
         {
-            //string url = "ws://gi455-305013.an.r.appspot.com/";
-            string url = "ws://127.0.0.1:8080/";
+            string url = "ws://gi455-305013.an.r.appspot.com/";
+            //string url = "ws://127.0.0.1:8080/";
             InternalConnect(url);
         }
 
@@ -204,6 +212,16 @@ namespace ChatWebSocket_Room
             EventStudent eventData = new EventStudent();
             eventData.eventName = "GetStudentData";
             eventData.studentID = studentID;
+
+            string toJson = JsonUtility.ToJson(eventData);
+            ws.Send(toJson);
+        }
+
+        public void RequestExamInfo(string token)
+        {
+            EventToken eventData = new EventToken();
+            eventData.eventName = "RequestExamInfo";
+            eventData.token = token;
 
             string toJson = JsonUtility.ToJson(eventData);
             ws.Send(toJson);
