@@ -40,6 +40,13 @@ namespace ChatWebSocket_Room
         }
 
         [System.Serializable]
+        public class EventSendAnswer : EventServer
+        {
+            public string token;
+            public string answer;
+        }
+
+        [System.Serializable]
         public struct StudentData
         {
             public string studentID;
@@ -108,8 +115,8 @@ namespace ChatWebSocket_Room
 
         public void Connect()
         {
-            string url = "ws://gi455-305013.an.r.appspot.com/";
-            //string url = "ws://127.0.0.1:8080/";
+            //string url = "ws://gi455-305013.an.r.appspot.com/";
+            string url = "ws://127.0.0.1:8080/";
             InternalConnect(url);
         }
 
@@ -222,6 +229,17 @@ namespace ChatWebSocket_Room
             EventToken eventData = new EventToken();
             eventData.eventName = "RequestExamInfo";
             eventData.token = token;
+
+            string toJson = JsonUtility.ToJson(eventData);
+            ws.Send(toJson);
+        }
+
+        public void SendAnswer(string token, string answer)
+        {
+            EventSendAnswer eventData = new EventSendAnswer();
+            eventData.eventName = "SendAnswer";
+            eventData.token = token;
+            eventData.answer = answer;
 
             string toJson = JsonUtility.ToJson(eventData);
             ws.Send(toJson);
@@ -352,6 +370,10 @@ namespace ChatWebSocket_Room
                         EventCallbackAddMoney receiveAddMoney = JsonUtility.FromJson<EventCallbackAddMoney>(callbackData);
                         if (OnAddMoney != null)
                             OnAddMoney(receiveAddMoney.status, receiveAddMoney.data);
+                        break;
+                    }
+                case " SendAnswer":
+                    {
                         break;
                     }
             }

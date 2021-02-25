@@ -5,6 +5,7 @@ const wss = new websocket.Server({server});
 var udid = require('udid');
 
 const admin = require('firebase-admin');
+const { EDESTADDRREQ } = require('constants');
 /*const serviceAcc = require('./gi455-305013-firebase-adminsdk-x33n5-c2af095e6a.json');
 admin.initializeApp({
     //credential: admin.credential.applicationDefault()
@@ -169,6 +170,16 @@ let EventOrder = (ws, data)=>{
             });
             break;
         }
+        case "SendAnswer":
+        {
+            let toJsonObj = JSON.parse(data);
+
+            SendAnswer(toJsonObj.token, toJsonObj.answer, (result)=>{
+                ws.send(JSON.stringify(result));
+            });
+            break;
+        }
+
     }
 }
 
@@ -405,6 +416,127 @@ const RequestExamInfo = async(token, callback)=>{
                 callback(result);
             }
         }
+    }
+}
+
+const SendAnswer = async(token, answer, callback)=>{
+
+    let result = {
+        eventName:"SendAnswer",
+        status: false,
+    }
+
+    if(token == undefined || token == ""){
+        result.status = false;
+        result.message = "Request fail your token is empty string.";
+        callback(result);
+    }else{
+
+        const tokenRef = db.collection('token').doc(token);
+        const tokenDoc = await tokenRef.get();
+
+        if (!tokenDoc.exists) {
+            result.status = false;
+            result.message = "Token is not found.";
+            callback(result);
+        }else{
+            const tokenData = tokenDoc.data();
+
+            if(tokenData.answer == undefined || tokenData.data == undefined)
+            {
+                let addCount = 1;
+                if(tokenData.count == undefined)
+                {
+                    tokenRef.update({
+                        count:addCount
+                    });
+                }
+                else
+                {
+                    addCount = tokenData.count + 1;
+
+                    tokenRef.update({
+                        count:addCount
+                    })
+                }
+
+                result.status = false;
+                result.message = "Your answer is wrong " + addCount + " time.";
+                callback(result);
+            }
+            else
+            {
+                if(tokenData.score != undefined)
+                {
+                    result.status = true;
+                    result.message = "Your answer is correct. Total score is " + tokenData.score;
+                    callback(result);
+                }
+                else
+                {
+
+                    if(answer == undefined || answer == ""){
+                        let addCount = 1;
+                        if(tokenData.count == undefined)
+                        {
+                            tokenRef.update({
+                                count:addCount
+                            });
+                        }
+                        else
+                        {
+                            addCount = tokenData.count + 1;
+        
+                            tokenRef.update({
+                                count:addCount
+                            })
+                        }
+        
+                        result.status = false;
+                        result.message = "Your answer is wrong " + addCount + " time.";
+                        callback(result);
+        
+                    }else{
+                        
+                        let addCount = 1;
+                        if(tokenData.count == undefined)
+                        {
+                            tokenRef.update({
+                                count:addCount
+                            });
+                        }
+                        else
+                        {
+                            addCount = tokenData.count + 1;
+        
+                            tokenRef.update({
+                                count:addCount
+                            })
+                        }
+    
+                        if(tokenData.answer === answer)
+                        {
+                            let score = 100 - (addCount*20);
+    
+                            tokenRef.update({
+                                score:score
+                            })
+    
+                            result.status = true;
+                            result.message = "Your answer is correct. Total score is " + score;
+                            callback(result);
+                        }
+                        else
+                        {
+                            result.status = false;
+                            result.message = "Your answer is wrong " + addCount + " time.";
+                            callback(result);
+                        }
+                    }
+                }
+            }
+        }
+
     }
 }
 

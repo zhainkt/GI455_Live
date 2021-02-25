@@ -79,12 +79,14 @@ namespace ChatWebSocket_Room
         MessageData messageDataSend;
 
         public string studentID = "test";
+        public string answer = "";
 
         private void OnGUI()
         {
             if(webSocket.IsConnected())
             {
                 studentID = GUILayout.TextField(studentID);
+                answer = GUILayout.TextField(answer);
 
                 if (GUILayout.Button("RequestToken"))
                 {
@@ -99,6 +101,11 @@ namespace ChatWebSocket_Room
                 if(GUILayout.Button("RequestExamInfo"))
                 {
                     webSocket.RequestExamInfo(studentID);
+                }
+
+                if(GUILayout.Button("SendAnswer"))
+                {
+                    webSocket.SendAnswer(studentID, answer);
                 }
             }
         }
