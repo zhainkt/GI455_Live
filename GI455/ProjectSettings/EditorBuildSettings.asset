@@ -5,7 +5,7 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
+  - enabled: 0
     path: Assets/ProgramChatRoom/Scenes/ChatRoom.unity
     guid: 5dddd4907624727438f52988a59b9b1e
   - enabled: 0
@@ -14,4 +14,7 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/ProgramChatWithJson/Scenes/Chat.unity
     guid: ffc743c120683e2428ffd88c2a51f97a
+  - enabled: 1
+    path: Assets/MultipleyerExample/Scenes/Multiplayer.unity
+    guid: 0e3cbb09c51b4fb478e9987d1c4703cb
   m_configObjects: {}

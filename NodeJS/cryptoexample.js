@@ -8,3 +8,4 @@ const hashedStr = crypto.createHmac('sha256', hashingSecret)
                         .digest('hex');
 
 console.log(hashedStr);
+console.log(hashedStr.split('').length);

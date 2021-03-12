@@ -95,6 +95,7 @@ namespace ChatWebSocket_Room
         public event DelegateHandler OnLeaveRoom;
         public event DelegateHandler OnLogin;
         public event DelegateHandler OnRegister;
+        public event DelegateHandler OnDisconnect;
 
         public event DelegateHandlerAddMoney OnAddMoney;
 
@@ -115,8 +116,8 @@ namespace ChatWebSocket_Room
 
         public void Connect()
         {
-            //string url = "ws://gi455-305013.an.r.appspot.com/";
-            string url = "ws://127.0.0.1:8080/";
+            string url = "ws://gi455-305013.an.r.appspot.com/";
+            //string url = "ws://127.0.0.1:8080/";
             InternalConnect(url);
         }
 
@@ -208,6 +209,7 @@ namespace ChatWebSocket_Room
         {
             EventStudent eventData = new EventStudent();
             eventData.eventName = "RequestToken";
+            //eventData.eventName = "StartExam";
             eventData.studentID = studentID;
 
             string toJson = JsonUtility.ToJson(eventData);

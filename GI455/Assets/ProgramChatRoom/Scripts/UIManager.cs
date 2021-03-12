@@ -81,35 +81,6 @@ namespace ChatWebSocket_Room
         public string studentID = "test";
         public string answer = "";
 
-        private void OnGUI()
-        {
-            if(webSocket.IsConnected())
-            {
-                studentID = GUILayout.TextField(studentID);
-                answer = GUILayout.TextField(answer);
-
-                if (GUILayout.Button("RequestToken"))
-                {
-                    webSocket.RequestToken(studentID);
-                }
-
-                if(GUILayout.Button("GetStudentData"))
-                {
-                    webSocket.GetStudentData(studentID);
-                }
-
-                if(GUILayout.Button("RequestExamInfo"))
-                {
-                    webSocket.RequestExamInfo(studentID);
-                }
-
-                if(GUILayout.Button("SendAnswer"))
-                {
-                    webSocket.SendAnswer(studentID, answer);
-                }
-            }
-        }
-
         // Start is called before the first frame update
         void Start()
         {
@@ -127,7 +98,7 @@ namespace ChatWebSocket_Room
             btnToRegister.onClick.AddListener(Btn_ToRegister);
 
             webSocket.OnConnectionSuccess += OnConnectionSuccess;
-            webSocket.OnConnectionFail += OnConnectionFail;
+            //webSocket.OnConnectionFail += OnConnectionFail;
             webSocket.OnReceiveMessage += OnReceiveMessage;
             webSocket.OnCreateRoom += OnCreateRoom;
             webSocket.OnJoinRoom += OnJoinRoom;

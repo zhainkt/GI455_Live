@@ -3,41 +3,52 @@ const server = require('http').Server(app);
 const websocket = require('ws');
 const wss = new websocket.Server({server});
 var udid = require('udid');
+//const fs = require('fs');
 
 const admin = require('firebase-admin');
-const { EDESTADDRREQ } = require('constants');
-/*const serviceAcc = require('./gi455-305013-firebase-adminsdk-x33n5-c2af095e6a.json');
+const serviceAcc = require('./gi455-305013-firebase-adminsdk-x33n5-c2af095e6a.json');
 admin.initializeApp({
     //credential: admin.credential.applicationDefault()
     credential: admin.credential.cert(serviceAcc),
     databaseURL: "https://gi455chatserver-default-rtdb.firebaseio.com"
-});*/
-admin.initializeApp();
+});
+//admin.initializeApp();
 
 const db = admin.firestore();
-
 const setData = async function() {
     const citiesRef = db.collection('students');
+    const propRef = db.collection('proposion').doc('TimeLimit');
 
-    fs.readFile('./student.csv', 'utf8', function(err, data) {
-        let textLine = data.split(/\n/);
-        //var result = textLine.replace(/\r/,'');
-        for(let i = 0; i < textLine.length; i++)
-        {
-            let clearText = textLine[i].replace(/\r/,'');
-            let splitData = clearText.split(',');
-            let id = splitData[0];
-            let name = splitData[1];
-            let email = splitData[2];
-    
-            citiesRef.doc(id).set({
-                name: name,
-                email: email
-            });
-        }
+    const propDoc = await propRef.get();
+    if (propDoc.exists) {
+        const propData = propDoc.data();
+
+        fs.readFile('./student3372.csv', 'utf8', function(err, data) {
+            let textLine = data.split(/\n/);
+            //var result = textLine.replace(/\r/,'');
+            for(let i = 0; i < textLine.length; i++)
+            {
+                let clearText = textLine[i].replace(/\r/,'');
+                let splitData = clearText.split(',');
+                let id = splitData[0];
+                let name = splitData[1];
+                let email = splitData[2];
+                let startTime = propData.startTimeSec2;
+                let endTime = propData.deadLineSec2;
         
-    });
+                citiesRef.doc(id).set({
+                    name: name,
+                    email: email,
+                    startTime:startTime,
+                    endTime:endTime
+                });
+            }
+        });
+    }
 }
+
+//setData();
+
 
 server.listen(process.env.PORT || 8080, ()=>{
     console.log("Server start at port "+server.address().port);
@@ -58,7 +69,9 @@ wss.on("connection", (ws)=>{
     
     console.log("client connected.");
 
-    wsList.push({
+    ws.close();
+
+    /*wsList.push({
         ws:ws,
         timeRes:0
     });
@@ -91,7 +104,7 @@ wss.on("connection", (ws)=>{
                 wsList.splice(i,1);
             }
         }
-    });
+    });*/
 });
 
 function CheckTimeStamp(ws){
@@ -116,12 +129,35 @@ function CheckTimeStamp(ws){
     return false;
 }
 
+const LocalCheckTime = async()=>{
+    const studentRef = db.collection('students');
+
+    const getDoc = await studentRef.get();
+
+    getDoc.docs.map((doc)=>{
+
+        const data = doc.data();
+
+        if(data.endTime == undefined || data.startTime == undefined)
+        {
+            console.log(data.name);
+        }
+        else
+        {
+            let timeLeft = data.endTime - data.startTime;
+
+            console.log(data.name+" : " + timeLeft);
+        }
+    });
+}
+
 let EventOrder = (ws, data)=>{
     
     jsonEvent = JSON.parse(data);
     
     switch(jsonEvent.eventName)
     {
+        //case "StartExam": //for test
         case "RequestToken" :
         {
             let toJsonObj = JSON.parse(data);
@@ -206,38 +242,49 @@ const RequestToken = async (studentID ,callback)=>{
         } else {
     
             let name = getDoc.data().name;
+            let startTime = getDoc.data().startTime;
             let token = getDoc.data().token;
-            if(token === undefined)
-            {
-                let newToken = udid(name);
-                const tokenRef = db.collection('token');
-                const proposionRef = db.collection('proposion');
-    
-                const timeStamp = admin.firestore.Timestamp.now();
-                const date = new Date(timeStamp * 1000);
-                const dateFormat = date.toLocaleString("th-TH", {timeZoneName: "short"});
-                
-                const propDoc = await proposionRef.doc('allprop').get();
-    
-                const propData = propDoc.data();
-                const propArr = propData.data;
-                var randomProp = RandomCharFromList(propArr);
+            const timeStamp = admin.firestore.Timestamp.now();
+            const date = new Date(timeStamp * 1000);
+            const dateFormat = date.toLocaleString("th-TH", {timeZoneName: "short"});
 
-                await tokenRef.doc(newToken).set({
-                    unix:timeStamp,
-                    dateTime:dateFormat,
-                    prop:randomProp
-                }).then(studentRef.update({
-                    token:newToken
-                }));
+            if(timeStamp >= startTime)
+            {
+                if(token === undefined)
+                {
+                    let newToken = udid(name);
+                    const tokenRef = db.collection('token');
+                    const proposionRef = db.collection('proposion');
+                    const propDoc = await proposionRef.doc('allprop').get();
+                    const propData = propDoc.data();
+                    const propArr = propData.data;
+                    var randomProp = RandomCharFromList(propArr);
     
-                token = newToken;
+                    await tokenRef.doc(newToken).set({
+                        unix:timeStamp,
+                        dateTime:dateFormat,
+                        prop:randomProp,
+                        startTime:getDoc.data().startTime,
+                        endTime:getDoc.data().endTime
+                    }).then(studentRef.update({
+                        token:newToken
+                    }));
+        
+                    token = newToken;
+                }
+        
+                result.status = true;
+                result.message = "success";
+                result.token = token;
+                callback(result);
             }
-    
-            result.status = true;
-            result.message = "success";
-            result.token = token;
-            callback(result);
+            else
+            {
+                result.status = false;
+                result.message = "Your test has not started.";
+                callback(result);
+            }
+            
         }
     }
 };
@@ -341,10 +388,24 @@ const RequestExamInfo = async(token, callback)=>{
         }else{
 
             const tokenData = tokenDoc.data();
+            const timeStamp = admin.firestore.Timestamp.now();
 
             if(tokenData.data === undefined && tokenData.answer === undefined)
             {
-                if(tokenData.prop === "A1"){
+                if(tokenData.prop === "A0"){
+
+                    let a0Data = GetA0();
+                    tokenRef.update({
+                        data:a0Data.data,
+                        answer:a0Data.answer
+                    });
+
+                    result.status = true;
+                    result.data = a0Data.data;
+    
+                    callback(result);
+
+                }else if(tokenData.prop === "A1"){
 
                     let a1Data = GetA1();
                     tokenRef.update({
@@ -441,8 +502,11 @@ const SendAnswer = async(token, answer, callback)=>{
             callback(result);
         }else{
             const tokenData = tokenDoc.data();
+            const timeStamp = admin.firestore.Timestamp.now();
 
-            if(tokenData.answer == undefined || tokenData.data == undefined)
+            
+
+            if(tokenData.answer == undefined || tokenData.data == undefined || tokenData.endTime == undefined)
             {
                 let addCount = 1;
                 if(tokenData.count == undefined)
@@ -460,6 +524,11 @@ const SendAnswer = async(token, answer, callback)=>{
                     })
                 }
 
+                console.log(tokenData.answer == undefined);
+                console.log(tokenData.data == undefined);
+                console.log(tokenData.endTime == undefined);
+
+                console.log("SendAnswer : fail [1]");
                 result.status = false;
                 result.message = "Your answer is wrong " + addCount + " time.";
                 callback(result);
@@ -469,68 +538,85 @@ const SendAnswer = async(token, answer, callback)=>{
                 if(tokenData.score != undefined)
                 {
                     result.status = true;
-                    result.message = "Your answer is correct. Total score is " + tokenData.score;
+                    result.message = "Your exam is finish. Total score is " + tokenData.score;
                     callback(result);
                 }
                 else
                 {
+                    console.log(timeStamp);
+                    console.log(tokenData.endTime);
+                    console.log("SendAnswer : currentTime = " + timeStamp +", endTime = " + tokenData.endTime);
+                    if(timeStamp > tokenData.endTime)
+                    {
+                        tokenRef.update({
+                            score:0
+                        });
 
-                    if(answer == undefined || answer == ""){
-                        let addCount = 1;
-                        if(tokenData.count == undefined)
-                        {
-                            tokenRef.update({
-                                count:addCount
-                            });
-                        }
-                        else
-                        {
-                            addCount = tokenData.count + 1;
-        
-                            tokenRef.update({
-                                count:addCount
-                            })
-                        }
-        
                         result.status = false;
-                        result.message = "Your answer is wrong " + addCount + " time.";
+                        result.message = "You submitted the exam too late.";
                         callback(result);
-        
-                    }else{
-                        
-                        let addCount = 1;
-                        if(tokenData.count == undefined)
-                        {
-                            tokenRef.update({
-                                count:addCount
-                            });
-                        }
-                        else
-                        {
-                            addCount = tokenData.count + 1;
-        
-                            tokenRef.update({
-                                count:addCount
-                            })
-                        }
-    
-                        if(tokenData.answer === answer)
-                        {
-                            let score = 100 - (addCount*20);
-    
-                            tokenRef.update({
-                                score:score
-                            })
-    
-                            result.status = true;
-                            result.message = "Your answer is correct. Total score is " + score;
-                            callback(result);
-                        }
-                        else
-                        {
+                    }
+                    else
+                    {
+                        if(answer == undefined || answer == ""){
+                            let addCount = 1;
+                            if(tokenData.count == undefined)
+                            {
+                                tokenRef.update({
+                                    count:addCount
+                                });
+                            }
+                            else
+                            {
+                                addCount = tokenData.count + 1;
+            
+                                tokenRef.update({
+                                    count:addCount
+                                })
+                            }
+            
+                            console.log("SendAnswer : fail [2]");
                             result.status = false;
                             result.message = "Your answer is wrong " + addCount + " time.";
                             callback(result);
+            
+                        }else{
+                            
+                            let addCount = 1;
+                            if(tokenData.count == undefined)
+                            {
+                                tokenRef.update({
+                                    count:addCount
+                                });
+                            }
+                            else
+                            {
+                                addCount = tokenData.count + 1;
+            
+                                tokenRef.update({
+                                    count:addCount
+                                })
+                            }
+        
+                            if(tokenData.answer === answer)
+                            {
+                                let score = 100 - (tokenData.count*20);
+        
+                                tokenRef.update({
+                                    score:score
+                                })
+        
+                                result.status = true;
+                                result.message = "Your answer is correct. Total score is " + score;
+                                callback(result);
+                            }
+                            else
+                            {
+                                console.log("SendAnswer : fail [3]");
+                                result.status = false;
+                                result.message = "Your answer is wrong " + addCount + " time.";
+                                callback(result);
+                            }
                         }
                     }
                 }
@@ -805,6 +891,37 @@ function GetA5(){
             answerSum += arrInt[i];
         }
     }
+
+    let result = {
+        data:str,
+        answer:answerSum.toString()
+    }
+
+    return result;
+}
+
+function GetA0(){
+
+    let arrInt = [];
+    var str = "";
+    let lengthArr = 1000;
+
+    for(let i = 0; i < lengthArr; i++)
+    {
+        let random = RandomRange(1, 999);
+        arrInt.push(random);
+
+        if(i == lengthArr-1)
+        {
+            str += ""+random.toString();
+        }else{
+            str += random.toString()+",";
+        }
+    }
+
+    let answerSum = 0;
+
+    answerSum = arrInt[978];
 
     let result = {
         data:str,

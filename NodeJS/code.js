@@ -118,6 +118,9 @@ var aa = [1,2,3,4]
 
 var answer = 0;
 
+
+console.time('loop');
+
 for(var i = 0; i < aa.length; i++)
 {
     var isEven = (i % 2) == 0;
@@ -134,5 +137,15 @@ for(var i = 0; i < aa.length; i++)
     }
 }
 
-console.log(answer);
+console.timeEnd('loop');
+
+let a = {
+    name:"test",
+    level:99
+}
+
+let b = {
+    name:"test2",
+    level:11
+}
 //============================================

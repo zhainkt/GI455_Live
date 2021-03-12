@@ -1,8 +1,10 @@
 const app = require('express')();
 const server = require('http').Server(app);
+const uuid = require('uuid');
 const websocket = require('ws');
 const wss = new websocket.Server({server});
 const sqlite = require('sqlite3').verbose();
+
 
 var database = new sqlite.Database('./database/chatDB.db', sqlite.OPEN_CREATE | sqlite.OPEN_READWRITE, (err)=>{
     if(err) throw err;
@@ -18,38 +20,48 @@ server.listen(process.env.PORT || 8080, ()=>{
 var roomList = [];
 /*
 {
-    roomName: ""
+    roomOption:{}
     wsList: []
 }
 */
 
 wss.on("connection", (ws)=>{
     
-    //Lobby
     console.log("client connected.");
-    //Reception
+
+    ws.id = uuid.v4();
+    
+    var callbackMsg = {
+        eventName:"Connect",
+        status:true,
+        data: ws.id
+    }
+
+    ws.send(JSON.stringify(callbackMsg));
+
     ws.on("message", (data)=>{
-        console.log("send from client :"+ data);
-
-        //========== Convert jsonStr into jsonObj =======
-
-        //toJsonObj = JSON.parse(data);
-
-        // I change to line below for prevent confusion
-        var toJsonObj = { 
-            roomName:"",
-            data:""
+        //console.log("send from client :"+ data);
+        var toJsonObj = {
+            eventName:""
         }
         toJsonObj = JSON.parse(data);
         //===============================================
 
         if(toJsonObj.eventName == "CreateRoom")//CreateRoom
         {
+            /*
+            {
+                eventName:"",
+                data:"",
+                roomOption:{}
+            }
+            */
+
             //============= Find room with roomName from Client =========
             var isFoundRoom = false;
             for(var i = 0; i < roomList.length; i++)
             {
-                if(roomList[i].roomName == toJsonObj.data)
+                if(roomList[i].roomOption.roomName == toJsonObj.roomOption.roomName)
                 {
                     isFoundRoom = true;
                     break;
@@ -67,7 +79,7 @@ wss.on("connection", (ws)=>{
                 //I will change to json string like a client side. Please see below
                 var callbackMsg = {
                     eventName:"CreateRoom",
-                    data:"fail"
+                    status:false,
                 }
                 var toJsonStr = JSON.stringify(callbackMsg);
                 ws.send(toJsonStr);
@@ -79,42 +91,35 @@ wss.on("connection", (ws)=>{
             {
                 //============ Create room and Add to roomList ==========
                 var newRoom = {
-                    roomName: toJsonObj.data,
+                    roomOption: toJsonObj.roomOption,
                     wsList: []
                 }
 
-                newRoom.wsList.push(ws);
-
+                newRoom.wsList.push({
+                    ws:ws,
+                });
                 roomList.push(newRoom);
-                //=======================================================
 
-                //========== Send callback message to Client ============
-
-                //ws.send("CreateRoomSuccess");
-
-                //I need to send roomName into client too. I will change to json string like a client side. Please see below
                 var callbackMsg = {
                     eventName:"CreateRoom",
-                    data:toJsonObj.data
+                    status:true,
+                    data: JSON.stringify(toJsonObj.roomOption)
                 }
                 var toJsonStr = JSON.stringify(callbackMsg);
                 ws.send(toJsonStr);
                 //=======================================================
                 console.log("client create room success.");
             }
-
-            //console.log("client request CreateRoom ["+toJsonObj.data+"]");
-            
         }
         else if(toJsonObj.eventName == "JoinRoom")//JoinRoom
         {
             //============= Home work ================
             // Implementation JoinRoom event when have request from client.
             var indexRoom = -1;
-            var roomName = toJsonObj.data;
+            var roomName = toJsonObj.roomOption.roomName;
             for(let i = 0; i < roomList.length; i++)
             {
-                if(roomList[i].roomName == roomName)
+                if(roomList[i].roomOption.roomName == roomName)
                 {
                     indexRoom = i;
                     break;
@@ -123,20 +128,20 @@ wss.on("connection", (ws)=>{
 
             let eventData = {
                 eventName:"JoinRoom",
-                data:""
+                status:false,
             }
 
             if(indexRoom == -1)
             {
                 console.log("Room : " + roomName + " is not found.");
-                eventData.data = "fail";
+                eventData.status = false;
             }
             else
             {
                 var isFoundWsInRoom = false; 
                 for(var i = 0; i < roomList[indexRoom].wsList.length; i++)
                 {
-                    if(roomList[indexRoom].wsList[i] == ws)
+                    if(roomList[indexRoom].wsList[i].ws == ws)
                     {
                         isFoundWsInRoom = true;
                         break
@@ -145,12 +150,15 @@ wss.on("connection", (ws)=>{
 
                 if(isFoundWsInRoom)
                 {
-                    eventData.data = "fail";
+                    eventData.status = false;
                 }
                 else
                 {
-                    roomList[indexRoom].wsList.push(ws);
-                    eventData.data = roomName;
+                    roomList[indexRoom].wsList.push({
+                        ws:ws,
+                    });
+                    eventData.status = true;
+                    eventData.roomOption = JSON.stringify(roomList[indexRoom].roomOption);
                 }
             }
 
@@ -169,7 +177,7 @@ wss.on("connection", (ws)=>{
             {
                 for(var j = 0; j < roomList[i].wsList.length; j++)//Loop in wsList in roomList
                 {
-                    if(ws == roomList[i].wsList[j])//If founded client.
+                    if(ws == roomList[i].wsList[j].ws)//If founded client.
                     {
                         roomList[i].wsList.splice(j, 1);//Remove at index one time. When found client.
 
@@ -193,7 +201,7 @@ wss.on("connection", (ws)=>{
                 //I will change to json string like a client side. Please see below
                 var callbackMsg = {
                     eventName:"LeaveRoom",
-                    data:"success"
+                    status:true
                 }
                 var toJsonStr = JSON.stringify(callbackMsg);
                 ws.send(toJsonStr);
@@ -210,7 +218,7 @@ wss.on("connection", (ws)=>{
                 //I will change to json string like a client side. Please see below
                 var callbackMsg = {
                     eventName:"LeaveRoom",
-                    data:"fail"
+                    status:false
                 }
                 var toJsonStr = JSON.stringify(callbackMsg);
                 ws.send(toJsonStr);
@@ -286,93 +294,29 @@ wss.on("connection", (ws)=>{
                 ws.send(toJsonStr);
             });
         }
-        else if(toJsonObj.eventName == "AddMoney")
-        {
+        else if(toJsonObj.eventName == "GetPlayerList"){
 
-            var userID = toJsonObj.userID;
-            var addMoney = toJsonObj.addMoney;
-            
-            database.all("SELECT Money FROM UserData WHERE UserID='"+userID+"'", (err,rows)=>{
-                if(err)
-                {
-                    var callbackMsg = {
-                        eventName:"AddMoney",
-                        status:"fail",
-                        data:0,
-                    }
-        
-                    var toJsonStr = JSON.stringify(callbackMsg);
-                    ws.send(toJsonStr);
-                }
-                else
-                {
-                    console.log(rows);
-                    if(rows.length > 0)
-                    {
-                        var currentMoney = rows[0].Money;
-                        currentMoney += addMoney;
-        
-                        database.all("UPDATE UserData SET Money='"+currentMoney+"' WHERE UserID='"+userID+"'", (err,rows)=>{
-        
-                            if(err)
-                            {
-                                var callbackMsg = {
-                                    eventName:"AddMoney",
-                                    status:"fail",
-                                    data:0
-                                }
-                    
-                                var toJsonStr = JSON.stringify(callbackMsg);
-                                ws.send(toJsonStr);
-                            }
-                            else
-                            {
-                                var callbackMsg = {
-                                    eventName:"AddMoney",
-                                    status:"success",
-                                    data:currentMoney,
-                                }
-                    
-                                var toJsonStr = JSON.stringify(callbackMsg);
-                                ws.send(toJsonStr);
-                            }
-        
-                        });
-                    }
-                    else
-                    {
-                        var callbackMsg = {
-                            eventName:"AddMoney",
-                            status:"fail",
-                            data:0
-                        }
-            
-                        var toJsonStr = JSON.stringify(callbackMsg);
-                        ws.send(toJsonStr);
-                    }
-                }
-            });
+        }
+        else if(toJsonObj.eventName == "ReplicateData"){
+            ReplicateData(ws, toJsonObj.data);
+        }
+        else if(toJsonObj.eventName == "OnceData"){
+            OnceData(ws, toJsonObj.data);
+        }
+        else if(toJsonObj.eventName == "RequestUIDObject"){
+            RequestUIDObject(ws);
         }
     });
 
-
-    /*wsList.push(ws);
-    
-    ws.on("message", (data)=>{
-        console.log("send from client :"+ data);
-        Boardcast(data);
-    });
-    */
     ws.on("close", ()=>{
-        console.log("client disconnected.");
-
         //============ Find client in room for remove client out of room ================
         for(var i = 0; i < roomList.length; i++)//Loop in roomList
         {
             for(var j = 0; j < roomList[i].wsList.length; j++)//Loop in wsList in roomList
             {
-                if(ws == roomList[i].wsList[j])//If founded client.
+                if(ws == roomList[i].wsList[j].ws)//If founded client.
                 {
+                    console.log("client leave room");
                     roomList[i].wsList.splice(j, 1);//Remove at index one time. When found client.
 
                     if(roomList[i].wsList.length <= 0)//If no one left in room remove this room now.
@@ -383,34 +327,93 @@ wss.on("connection", (ws)=>{
                 }
             }
         }
+        console.log("client disconnected.");
         //===============================================================================
     });
 });
 
-function Boardcast(ws, message)
+function RequestUIDObject(ws)
 {
-    var selectRoomIndex = -1;
+    let uid = uuid.v1();
+    var callbackMsg = {
+        eventName:"RequestUIDObject",
+        data:uid
+    }
+    ws.send(JSON.stringify(callbackMsg));
+}
 
-    for(var i = 0; i < roomList.length; i++)
+function ReplicateData(ws, data)
+{   
+    for(let i = 0; i < roomList.length; i++)
     {
-        for(var j = 0; j < roomList[i].wsList.length; j++)
+        for(let j = 0; j < roomList[i].wsList.length; j++)
         {
-            if(ws == roomList[i].wsList[j])
+            if(ws == roomList[i].wsList[j].ws)
             {
-                selectRoomIndex = i;
+                roomList[i].wsList[j].replicateData = data;
                 break;
             }
         }
     }
+}
 
-    for(var i = 0 ; i < roomList[selectRoomIndex].wsList.length; i++)
+function OnceData(ws,data)
+{
+    for(let i = 0; i < roomList.length; i++)
     {
-        var callbackMsg = {
-            eventName:"SendMessage",
-            data:message
+        for(let j = 0; j < roomList[i].wsList.length; j++)
+        {
+            if(ws == roomList[i].wsList[j].ws)
+            {
+                roomList[i].wsList[j].onceData = data;
+                break;
+            }
         }
-
-        roomList[selectRoomIndex].wsList[i].send(JSON.stringify(callbackMsg));
     }
 }
+
+function Boardcast()
+{
+    for(var i = 0; i < roomList.length; i++)
+    {
+        for(var j = 0; j < roomList[i].wsList.length; j++)
+        {
+            for(var k = 0; k < roomList[i].wsList.length; k++)
+            {
+                var ws = roomList[i].wsList[k].ws;
+                var replicateData = roomList[i].wsList[j].replicateData;
+                var onceData = roomList[i].wsList[j].onceData;
+                
+                if(replicateData != undefined && replicateData != "")
+                {
+                    var callbackMsg = {
+                        eventName:"ReplicateData",
+                        replicateData:replicateData
+                    }
+                    ws.send(JSON.stringify(callbackMsg));
+                }
+
+                if(onceData != undefined && onceData != "")
+                {
+                    var callbackMsg = {
+                        eventName:"OnceData",
+                        onceData:onceData
+                    }
+                    ws.send(JSON.stringify(callbackMsg));
+                }
+            }
+
+            if(roomList[i].wsList[j].onceData != "")
+            {
+                roomList[i].wsList[j].onceData = "";
+            }
+        }
+    }
+}
+
+const serverTickRate = 64;
+const millInterval = (1/serverTickRate) * 1000;
+setInterval(()=>{
+    Boardcast();
+}, millInterval);
 
