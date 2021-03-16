@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using WebSocketSharp;
 using System;
+using System.Linq;
 
 namespace MultiplyerExample
 {
@@ -33,12 +34,13 @@ namespace MultiplyerExample
         public string clientID;
 
         private List<string> messageQueue = new List<string>();
+        private List<byte[]> binaryQueue = new List<byte[]>();
 
         private Room currentRoom;
 
         public ReplicateList replicateSend = new ReplicateList();
 
-        private List<ReplicateObject> replicateObjectList = new List<ReplicateObject>();
+        private Dictionary<string, ReplicateObject> replicationObjectDict = new Dictionary<string, ReplicateObject>();
 
         private ReplicateObject tempSpawnNetworkObj;
 
@@ -114,7 +116,7 @@ namespace MultiplyerExample
 
         public void CreateRoom(Room.RoomOption roomOption)
         {
-            CreateRoomData data = new CreateRoomData();
+            CreateRoomSendData data = new CreateRoomSendData();
 
             data.eventName = "CreateRoom";
             data.roomOption = roomOption;
@@ -126,7 +128,7 @@ namespace MultiplyerExample
 
         public void JoinRoom(Room.RoomOption roomOption)
         {
-            CreateRoomData data = new CreateRoomData();
+            CreateRoomSendData data = new CreateRoomSendData();
 
             data.eventName = "JoinRoom";
             data.roomOption = roomOption;
@@ -138,7 +140,7 @@ namespace MultiplyerExample
 
         public void LeaveRoom()
         {
-            ServerData data = new ServerData(); ;
+            ServerSendData data = new ServerSendData(); ;
 
             data.eventName = "LeaveRoom";
 
@@ -149,7 +151,7 @@ namespace MultiplyerExample
 
         public void Login(LoginOption loginOption)
         {
-            LoginData data = new LoginData();
+            LoginSendData data = new LoginSendData();
             data.eventName = "Login";
             data.loginOption = loginOption;
 
@@ -159,7 +161,7 @@ namespace MultiplyerExample
 
         public void Register(RegisterOption registerOption)
         {
-            RegisterData data = new RegisterData();
+            RegisterSendData data = new RegisterSendData();
             data.eventName = "Register";
             data.registerOption = registerOption;
 
@@ -169,7 +171,7 @@ namespace MultiplyerExample
 
         public void SpawnNetworkObject(string prefName, Vector3 position, Quaternion rotation)
         {
-            ServerData data = new ServerData();
+            ServerSendData data = new ServerSendData();
             data.eventName = "RequestUIDObject";
 
             string toJson = JsonUtility.ToJson(data);
@@ -181,19 +183,15 @@ namespace MultiplyerExample
             }
 
             tempSpawnNetworkObj.prefName = prefName;
-            tempSpawnNetworkObj.position = position;
-            tempSpawnNetworkObj.rotation = rotation;
+            tempSpawnNetworkObj.SetPositionData(position);
+            tempSpawnNetworkObj.SetRotationData(rotation);
         }
 
         public void DestroyNetworkObject(string objectID)
         {
-            for (int i = 0; i < replicateSend.replicateObjectList.Count; i++)
+            if(replicateSend.replicationObjectDict.ContainsKey(objectID))
             {
-                if (replicateSend.replicateObjectList[i].objectID == objectID)
-                {
-                    replicateSend.replicateObjectList[i].isMarkRemove = true;
-                    break;
-                }
+                replicateSend.replicationObjectDict[objectID].isMarkRemove = true;
             }
         }
 
@@ -213,8 +211,14 @@ namespace MultiplyerExample
         {
             if (messageQueue.Count > 0)
             {
-                NotifyCallback(messageQueue[0]);
+                NotifyTextCallback(messageQueue[0]);
                 messageQueue.RemoveAt(0);
+            }
+
+            if(binaryQueue.Count > 0)
+            {
+                NotifyBinaryCallback(binaryQueue[0]);
+                binaryQueue.RemoveAt(0);
             }
         }
 
@@ -226,22 +230,25 @@ namespace MultiplyerExample
             {
                 if (currentRoom != null)
                 {
-                    for (int i = 0; i < replicateSend.replicateObjectList.Count; i++)
+                    foreach (var replicationObj in replicateSend.replicationObjectDict)
                     {
-                        if(replicateSend.replicateObjectList[i].netObject != null && replicateSend.replicateObjectList[i].isMarkRemove == false)
+                        if(replicationObj.Value.netObject != null && replicationObj.Value.isMarkRemove == false)
                         {
-                            replicateSend.replicateObjectList[i].position = replicateSend.replicateObjectList[i].netObject.transform.position;
-                            replicateSend.replicateObjectList[i].rotation = replicateSend.replicateObjectList[i].netObject.transform.rotation;
+                            replicationObj.Value.SetPositionData(replicationObj.Value.netObject.transform.position);
+                            replicationObj.Value.SetRotationData(replicationObj.Value.netObject.transform.rotation);
                         }
-                        else if(replicateSend.replicateObjectList[i].netObject != null && replicateSend.replicateObjectList[i].isMarkRemove == true)
+                        else if(replicationObj.Value.netObject != null && replicationObj.Value.isMarkRemove == true)
                         {
-                            Destroy(replicateSend.replicateObjectList[i].netObject.gameObject);
+                            Destroy(replicationObj.Value.netObject.gameObject);
                         }
                     }
 
-                    string toJson = JsonUtility.ToJson(replicateSend);
+                    replicateSend.replicationObjectList = replicateSend.replicationObjectDict.Values.ToList();
+
+                    //string toJson = JsonUtility.ToJson(replicateSend);
+
                     //Debug.Log(toJson);
-                    ReplicateData(toJson);
+                    ReplicateData();
                 }
 
                 yield return new WaitForSeconds(sendPerSecond);
@@ -250,11 +257,11 @@ namespace MultiplyerExample
             
         }
 
-        private void NotifyCallback(string callbackData)
+        private void NotifyTextCallback(string callbackData)
         {
             //Debug.Log("OnMessage : " + callbackData);
 
-            ServerData recieveEvent = JsonUtility.FromJson<ServerData>(callbackData);
+            ServerSendData recieveEvent = JsonUtility.FromJson<ServerSendData>(callbackData);
 
             //Debug.Log(recieveEvent.eventName);
             if(recieveEvent == null)
@@ -331,7 +338,7 @@ namespace MultiplyerExample
                     }
                 case "ReplicateData":
                     {
-                        Internal_ReplicateData(callbackData);
+                        //Internal_ReplicateData(callbackData);
                         break;
                     }
                 default:
@@ -342,33 +349,58 @@ namespace MultiplyerExample
             }
         }
 
-        private void OnMessage(object sender, MessageEventArgs messageEventArgs)
+        private void NotifyBinaryCallback(byte[] bytes)
         {
-            messageQueue.Add(messageEventArgs.Data);
+            Internal_ReplicateData(bytes);
         }
 
-        private void ReplicateData(string dataStr)
+        private void OnMessage(object sender, MessageEventArgs messageEventArgs)
         {
-            ServerData data = new ServerData();
-            data.eventName = "ReplicateData";
-            data.data = dataStr;
+            Debug.Log("IsText : " + messageEventArgs.IsText + "/ IsBin : "+messageEventArgs.IsBinary);
 
-            string toJson = JsonUtility.ToJson(data);
-            ws.Send(toJson);
+            if (messageEventArgs.IsText)
+            {
+                messageQueue.Add(messageEventArgs.Data);
+            }
+            else if(messageEventArgs.IsBinary)
+            {
+                
+                binaryQueue.Add(messageEventArgs.RawData);
+            }
+            
+        }
+
+        private void ReplicateData()
+        {
+            /*ReplicateSendData data = new ReplicateSendData();
+            data.eventName = "ReplicateData";
+            data.replicateByteData = replicateSend.ToByteArr();
+
+            //Debug.Log(currentRoom.roomOption.roomName);
+            data.roomName = currentRoom.roomOption.roomName;
+
+            string toJson = JsonUtility.ToJson(data);*/
+            //Debug.Log("total send byte : " + System.Text.ASCIIEncoding.ASCII.GetByteCount(toJson));
+
+            byte[] byteArr = replicateSend.ToByteArr();
+            ws.Send(byteArr);
         }
 
         private void Internal_OnCreateRoom(string callbackData)
         {
-            CreateRoomData createRoomData = JsonUtility.FromJson<CreateRoomData>(callbackData);
+            Debug.Log(callbackData);
+            Room.RoomOption createRoomData = JsonUtility.FromJson<Room.RoomOption>(callbackData);
             Room newRoom = new Room();
-            newRoom.roomOption = createRoomData.roomOption;
+            newRoom.roomOption = createRoomData;
             currentRoom = newRoom;
+
+            Debug.Log(createRoomData.roomName);
         }
 
         private void Internal_OnJoinRoom(string callbackData)
         {
             Debug.Log(callbackData);
-            CreateRoomData createRoomData = JsonUtility.FromJson<CreateRoomData>(callbackData);
+            CreateRoomSendData createRoomData = JsonUtility.FromJson<CreateRoomSendData>(callbackData);
             Room newRoom = new Room();
             newRoom.roomOption = createRoomData.roomOption;
             currentRoom = newRoom;
@@ -379,44 +411,47 @@ namespace MultiplyerExample
             currentRoom = null;
         }
 
-        private void Internal_ReplicateData(string jsonStr)
+        private void Internal_ReplicateData(byte[] bytes)
         {
-            ReplicateData replicateData = JsonUtility.FromJson<ReplicateData>(jsonStr);
+            ReplicateList newReplicationList = new ReplicateList();
+            newReplicationList = newReplicationList.FromByteArr(bytes);
 
-            if (OnReplicateData != null)
+            //ReplicateSendData replicateData = JsonUtility.FromJson<ReplicateSendData>(jsonStr);
+
+            //if (OnReplicateData != null)
+            //{
+            //    OnReplicateData(replicateData.replicateData);
+            //}
+            
+            ReplicateList toReplicateList = newReplicationList; //JsonUtility.FromJson<ReplicateList>(replicateData.replicateData);
+
+            Debug.Log(toReplicateList.replicationObjectList.Count);
+
+            for (int i = 0; i < toReplicateList.replicationObjectList.Count; i++)
             {
-                OnReplicateData(replicateData.replicateData);
-            }
-
-            ReplicateList toReplicateList = JsonUtility.FromJson<ReplicateList>(replicateData.replicateData);
-
-            for (int i = 0; i < toReplicateList.replicateObjectList.Count; i++)
-            {
-                ReplicateObject replicateObj = toReplicateList.replicateObjectList[i];
+                ReplicateObject replicateObj = toReplicateList.replicationObjectList[i];
                 bool isNewObject = true;
                 bool isNotExist = true;
+                string objectID = replicateObj.objectID;
 
-                for (int j = 0; j < replicateObjectList.Count; j++)
+                Debug.Log(objectID);
+
+                if (replicationObjectDict.ContainsKey(objectID))
                 {
-                    if (replicateObj.objectID == replicateObjectList[j].objectID)
+                    if(replicateObj.isMarkRemove == false)
                     {
-                        if (replicateObj.isMarkRemove == false)
+                        replicationObjectDict[objectID].SetPositionData(replicateObj.GetPositionData());
+                        replicationObjectDict[objectID].SetRotationData(replicateObj.GetRotationData());
+
+                        if(replicationObjectDict[objectID].netObject != null)
                         {
-                            replicateObjectList[j].position = replicateObj.position;
-                            replicateObjectList[j].rotation = replicateObj.rotation;
-
-                            if (replicateObjectList[j].netObject != null)
-                            {
-                                replicateObjectList[j].netObject.position = replicateObjectList[j].position;
-                                replicateObjectList[j].netObject.rotation = replicateObjectList[j].rotation;
-                            }
-
-                            
+                            replicationObjectDict[objectID].netObject.position = replicationObjectDict[objectID].GetPositionData();
+                            replicationObjectDict[objectID].netObject.rotation = replicationObjectDict[objectID].GetRotationData();
                         }
-                        else if (replicateObj.isMarkRemove == true && replicateObjectList[j].netObject != null)
+                        else if(replicateObj.isMarkRemove == true && replicateObj.netObject != null)
                         {
-                            Destroy(replicateObjectList[j].netObject.gameObject);
-                            replicateObjectList.RemoveAt(j);
+                            Destroy(replicationObjectDict[objectID].netObject.gameObject);
+                            replicationObjectDict.Remove(objectID);
                             break;
                         }
 
@@ -424,17 +459,14 @@ namespace MultiplyerExample
                     }
                 }
 
-                for (int j = 0; j < replicateSend.replicateObjectList.Count; j++)
+                if(replicateSend.replicationObjectDict.ContainsKey(objectID))
                 {
-                    if (replicateObj.objectID == replicateSend.replicateObjectList[j].objectID)
-                    {
-                        isNotExist = false;
+                    isNotExist = false;
 
-                        if(replicateObj.isMarkRemove)
-                        {
-                            replicateSend.replicateObjectList.RemoveAt(j);
-                            break;
-                        }
+                    if (replicateObj.isMarkRemove)
+                    {
+                        replicateSend.replicationObjectDict.Remove(objectID);
+                        break;
                     }
                 }
 
@@ -445,16 +477,14 @@ namespace MultiplyerExample
                     NetObject newNetObject = newGameObject.GetComponent<NetObject>();
                     newNetObject.ownerID = replicateObj.ownerID;
                     newNetObject.objectID = replicateObj.objectID;
-                    newNetObject.position = replicateObj.position;
-                    newNetObject.rotation = replicateObj.rotation;
-                    newNetObject.transform.position = replicateObj.position;
-                    newNetObject.transform.rotation = replicateObj.rotation;
+                    newNetObject.position = replicateObj.GetPositionData();
+                    newNetObject.rotation = replicateObj.GetRotationData();
+                    newNetObject.transform.position = replicateObj.GetPositionData();
+                    newNetObject.transform.rotation = replicateObj.GetRotationData();
                     replicateObj.netObject = newNetObject;
-                    replicateObjectList.Add(replicateObj);
+                    replicationObjectDict.Add(objectID, replicateObj);
                 }
             }
-
-            //Debug.Log(toReplicateList.replicateObjectList.Count);
         }
 
         private void Internal_SpawnNetworkObject(string uid)
@@ -468,21 +498,22 @@ namespace MultiplyerExample
             newReplicateObject.ownerID = clientID;
             newReplicateObject.objectID = uid;
             newReplicateObject.prefName = tempSpawnNetworkObj.prefName;
-            newReplicateObject.position = tempSpawnNetworkObj.position;
-            newReplicateObject.rotation = tempSpawnNetworkObj.rotation;
+            newReplicateObject.SetPositionData(tempSpawnNetworkObj.GetPositionData());
+            newReplicateObject.SetRotationData(tempSpawnNetworkObj.GetRotationData());
 
             GameObject newGameObject = Instantiate(Resources.Load(newReplicateObject.prefName)) as GameObject;
             NetObject newNetObject = newGameObject.GetComponent<NetObject>();
             newNetObject.ownerID = clientID;
             newNetObject.objectID = uid;
-            newNetObject.position = newReplicateObject.position;
-            newNetObject.rotation = newReplicateObject.rotation;
-            newNetObject.transform.position = newReplicateObject.position;
-            newNetObject.transform.rotation = newReplicateObject.rotation;
+            newNetObject.position = newReplicateObject.GetPositionData();
+            newNetObject.rotation = newReplicateObject.GetRotationData();
+            newNetObject.transform.position = newReplicateObject.GetPositionData();
+            newNetObject.transform.rotation = newReplicateObject.GetRotationData();
             newReplicateObject.netObject = newNetObject;
 
-            Debug.LogError("Add new replicate");
-            replicateSend.replicateObjectList.Add(newReplicateObject);
+            replicateSend.replicationObjectDict.Add(uid, newReplicateObject);
+
+            replicateSend.replicationObjectList.Add(newReplicateObject);
 
             tempSpawnNetworkObj.prefName = "";
         }
