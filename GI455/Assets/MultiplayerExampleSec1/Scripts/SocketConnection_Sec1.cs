@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using WebSocketSharp;
 using System;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.IO;
 
 namespace MultiplayerExampleSec1
 {
@@ -96,7 +98,23 @@ namespace MultiplayerExampleSec1
 
         private List<string> messageQueue = new List<string>();
 
+        private List<byte[]> binaryQueue = new List<byte[]>();
+
         private NetworkDataOption.ReplicateObjectList replicateListSend = new NetworkDataOption.ReplicateObjectList();
+
+        private NetworkDataOption.ReplicateObjectList replicateListRecv = new NetworkDataOption.ReplicateObjectList();
+
+        private NetworkDataOption.ReplicateObject tempSpawnNetworkObj;
+
+        private string clientID;
+
+        public string ClientID
+        {
+            get
+            {
+                return clientID;
+            }
+        }
 
         public static SocketConnection_Sec1 instance;
 
@@ -154,13 +172,24 @@ namespace MultiplayerExampleSec1
 
         private IEnumerator IEUpdateReplicateObject()
         {
-            float duration = 1.0f;
+            float duration = 0.1f;
 
             WaitForSeconds waitForSec = new WaitForSeconds(duration);
 
             while (true)
             {
+                for(int i = 0; i < replicateListSend.replicateObjectList.Count; i++)
+                {
+                    if (replicateListSend.replicateObjectList[i].netObj != null)
+                    {
+                        replicateListSend.replicateObjectList[i].position = replicateListSend.replicateObjectList[i].netObj.transform.position;
+                        replicateListSend.replicateObjectList[i].rotation = replicateListSend.replicateObjectList[i].netObj.transform.rotation;
+                    }
+                }
+
                 string toJson = JsonUtility.ToJson(replicateListSend);
+
+                //Debug.Log(toJson);
 
                 SendReplicateData(toJson);
 
@@ -194,12 +223,12 @@ namespace MultiplayerExampleSec1
             ws.Send(toJson);
         }
 
-        public void JoinRoom(string roomName)
+        public void JoinRoom(Room.RoomOption roomOption)
         {
-            NetworkDataOption.EventCallbackGeneral eventData = new NetworkDataOption.EventCallbackGeneral();
+            NetworkDataOption.EventSendCreateRoom eventData = new NetworkDataOption.EventSendCreateRoom();
 
             eventData.eventName = "JoinRoom";
-            eventData.data = roomName;
+            eventData.roomOption = roomOption;
 
             string toJson = JsonUtility.ToJson(eventData);
 
@@ -215,48 +244,6 @@ namespace MultiplayerExampleSec1
 
             string toJson = JsonUtility.ToJson(eventData);
 
-            ws.Send(toJson);
-        }
-
-        public void RequestToken(string studentID)
-        {
-            EventStudent eventData = new EventStudent();
-            eventData.eventName = "RequestToken";
-            //eventData.eventName = "StartExam";
-            eventData.studentID = studentID;
-
-            string toJson = JsonUtility.ToJson(eventData);
-            ws.Send(toJson);
-        }
-
-        public void GetStudentData(string studentID)
-        {
-            EventStudent eventData = new EventStudent();
-            eventData.eventName = "GetStudentData";
-            eventData.studentID = studentID;
-
-            string toJson = JsonUtility.ToJson(eventData);
-            ws.Send(toJson);
-        }
-
-        public void RequestExamInfo(string token)
-        {
-            EventToken eventData = new EventToken();
-            eventData.eventName = "RequestExamInfo";
-            eventData.token = token;
-
-            string toJson = JsonUtility.ToJson(eventData);
-            ws.Send(toJson);
-        }
-
-        public void SendAnswer(string token, string answer)
-        {
-            EventSendAnswer eventData = new EventSendAnswer();
-            eventData.eventName = "SendAnswer";
-            eventData.token = token;
-            eventData.answer = answer;
-
-            string toJson = JsonUtility.ToJson(eventData);
             ws.Send(toJson);
         }
 
@@ -280,28 +267,47 @@ namespace MultiplayerExampleSec1
             ws.Send(toJson);
         }
 
-        public void AddMoney()
+        public void SendReplicateData(string jsonStr)
         {
-            EventAddMoney eventData = new EventAddMoney(); ;
-
-            eventData.eventName = "AddMoney";
-            eventData.userID = "test0005";
-            eventData.addMoney = 100;
+            NetworkDataOption.EventSendReplicate eventData = new NetworkDataOption.EventSendReplicate();
+            eventData.eventName = "ReplicateData";
+            eventData.data = jsonStr;
+            eventData.roomName = currentRoom.roomOption.roomName;
 
             string toJson = JsonUtility.ToJson(eventData);
 
             ws.Send(toJson);
         }
 
-        public void SendReplicateData(string jsonStr)
+        public void SpawnNetworkObject(string prefName, Vector3 position, Quaternion rotation)
         {
             NetworkDataOption.EventCallbackGeneral eventData = new NetworkDataOption.EventCallbackGeneral();
-            eventData.eventName = "ReplicateData";
-            eventData.data = jsonStr;
+            eventData.eventName = "RequestUIDObject";
 
             string toJson = JsonUtility.ToJson(eventData);
-
             ws.Send(toJson);
+
+            if(tempSpawnNetworkObj == null)
+            {
+                tempSpawnNetworkObj = new NetworkDataOption.ReplicateObject();
+            }
+
+            tempSpawnNetworkObj.prefName = prefName;
+            tempSpawnNetworkObj.position = position;
+            tempSpawnNetworkObj.rotation = rotation;
+        }
+
+        public void DestroyNetworkObject(string objectID)
+        {
+            for(int i = 0; i < replicateListSend.replicateObjectList.Count; i++)
+            {
+                if(replicateListSend.replicateObjectList[i].objectID == objectID)
+                {
+                    Destroy(replicateListSend.replicateObjectList[i].netObj.gameObject);
+                    replicateListSend.replicateObjectList.RemoveAt(i);
+                    break;
+                }
+            }
         }
 
         public void SendMessage(string data)
@@ -314,7 +320,6 @@ namespace MultiplayerExampleSec1
             msgEventData.data = data;
 
             string toJson = JsonUtility.ToJson(msgEventData);
-
             ws.Send(toJson);
         }
 
@@ -332,11 +337,17 @@ namespace MultiplayerExampleSec1
                 NotifyCallback(messageQueue[0]);
                 messageQueue.RemoveAt(0);
             }
+
+            if (binaryQueue.Count > 0)
+            {
+                NotifyBinaryCallback(binaryQueue[0]);
+                binaryQueue.RemoveAt(0);
+            }
         }
 
         private void NotifyCallback(string callbackData)
         {
-            Debug.Log("OnMessage : " + callbackData);
+            //Debug.Log("OnMessage : " + callbackData);
 
             EventServer recieveEvent = JsonUtility.FromJson<EventServer>(callbackData);
 
@@ -344,6 +355,12 @@ namespace MultiplayerExampleSec1
 
             switch (recieveEvent.eventName)
             {
+                case "Connect":
+                    {
+                        NetworkDataOption.EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<NetworkDataOption.EventCallbackGeneral>(callbackData);
+                        clientID = receiveEventGeneral.data;
+                        break;
+                    }
                 case "CreateRoom":
                     {
                         NetworkDataOption.EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<NetworkDataOption.EventCallbackGeneral>(callbackData);
@@ -357,6 +374,9 @@ namespace MultiplayerExampleSec1
                 case "JoinRoom":
                     {
                         NetworkDataOption.EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<NetworkDataOption.EventCallbackGeneral>(callbackData);
+
+                        Internal_JoinRoom(receiveEventGeneral.data);
+
                         if (OnJoinRoom != null)
                             OnJoinRoom(receiveEventGeneral.data);
                         break;
@@ -375,11 +395,6 @@ namespace MultiplayerExampleSec1
                             OnReceiveMessage(receiveEventGeneral.data);
                         break;
                     }
-                case "RequestToken":
-                    {
-                        //Debug.Log("message : " + (string)recieveEvent.data);
-                        break;
-                    }
                 case "Login":
                     {
                         NetworkDataOption.EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<NetworkDataOption.EventCallbackGeneral>(callbackData);
@@ -394,23 +409,38 @@ namespace MultiplayerExampleSec1
                             OnRegister(receiveEventGeneral.data);
                         break;
                     }
-                case "AddMoney":
+                case "ReplicateData":
                     {
-                        EventCallbackAddMoney receiveAddMoney = JsonUtility.FromJson<EventCallbackAddMoney>(callbackData);
-                        if (OnAddMoney != null)
-                            OnAddMoney(receiveAddMoney.status, receiveAddMoney.data);
+                        NetworkDataOption.EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<NetworkDataOption.EventCallbackGeneral>(callbackData);
+                        Internal_ReplicateData(receiveEventGeneral.data);
                         break;
                     }
-                case " SendAnswer":
+                case "RequestUIDObject":
                     {
+                        NetworkDataOption.EventCallbackGeneral receiveEventGeneral = JsonUtility.FromJson<NetworkDataOption.EventCallbackGeneral>(callbackData);
+                        Internal_SpawnNetworkObject(receiveEventGeneral.data);
                         break;
                     }
+                default:
+                    break;
             }
+        }
+
+        private void NotifyBinaryCallback(byte[] byteArr)
+        {
+            NetworkDataOption.ReplicateObjectList toReplicateList = new NetworkDataOption.ReplicateObjectList();
+            toReplicateList = toReplicateList.FromByteArr(byteArr);
+
+            toReplicateList.replicateObjectList[0].position = Vector3.zero;
         }
 
         private void OnMessage(object sender, MessageEventArgs messageEventArgs)
         {
-            messageQueue.Add(messageEventArgs.Data);
+            if(messageEventArgs.IsText)
+                messageQueue.Add(messageEventArgs.Data);
+
+            if(messageEventArgs.IsBinary)
+                binaryQueue.Add(messageEventArgs.RawData);
         }
 
         private void Internal_CreateRoom(string data)
@@ -424,6 +454,106 @@ namespace MultiplayerExampleSec1
 
                 StartCoroutine(IEUpdateReplicateObject());
             }
+        }
+
+        private void Internal_JoinRoom(string data)
+        {
+            Internal_CreateRoom(data);
+        }
+
+        private void Internal_ReplicateData(string data)
+        {
+            NetworkDataOption.ReplicateObjectList toReplicateList = JsonUtility.FromJson<NetworkDataOption.ReplicateObjectList>(data);
+
+            //Remove
+            if(toReplicateList.replicateObjectList.Count < replicateListRecv.replicateObjectList.Count)
+            {
+                for (int i = 0; i < replicateListRecv.replicateObjectList.Count; i++)
+                {
+                    bool isRemoveObject = true;
+                    NetworkDataOption.ReplicateObject replicateObjClient = replicateListRecv.replicateObjectList[i];
+
+                    for (int j = 0; j < toReplicateList.replicateObjectList.Count; j++)
+                    {
+                        NetworkDataOption.ReplicateObject replicateObjServer = toReplicateList.replicateObjectList[j];
+                        if (replicateObjServer.objectID == replicateObjClient.objectID)
+                        {
+                            isRemoveObject = false;
+                            break;
+                        }
+                    }
+
+                    if (isRemoveObject == true)
+                    {
+                        Destroy(replicateObjClient.netObj.gameObject);
+                        replicateListRecv.replicateObjectList.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
+            //For Create
+            else if(toReplicateList.replicateObjectList.Count >= replicateListRecv.replicateObjectList.Count)
+            {
+                for (int i = 0; i < toReplicateList.replicateObjectList.Count; i++)
+                {
+                    NetworkDataOption.ReplicateObject replicateObj = toReplicateList.replicateObjectList[i];
+                    bool isNewObject = true;
+                    bool isNotSendObj = true;
+
+                    string objectID = replicateObj.objectID;
+
+                    for (int j = 0; j < replicateListRecv.replicateObjectList.Count; j++)
+                    {
+                        if (replicateListRecv.replicateObjectList[j].objectID == objectID)
+                        {
+                            replicateListRecv.replicateObjectList[j].netObj.replicateData = replicateObj;
+                            isNewObject = false;
+                        }
+                    }
+
+                    for (int j = 0; j < replicateListSend.replicateObjectList.Count; j++)
+                    {
+                        if (replicateListSend.replicateObjectList[j].objectID == objectID)
+                        {
+                            isNotSendObj = false;
+                            break;
+                        }
+                    }
+
+                    if (isNewObject == true && isNotSendObj == true)
+                    {
+                        GameObject prefObj = Resources.Load(replicateObj.prefName) as GameObject;
+                        GameObject newGameObject = Instantiate(prefObj, replicateObj.position, replicateObj.rotation);
+                        NetworkObject newNetObj = newGameObject.GetComponent<NetworkObject>();
+                        replicateObj.netObj = newNetObj;
+                        newNetObj.replicateData = replicateObj;
+                        replicateListRecv.replicateObjectList.Add(replicateObj);
+                    }
+                }
+            }
+        }
+
+        private void Internal_SpawnNetworkObject(string data)
+        {
+            if (tempSpawnNetworkObj == null || tempSpawnNetworkObj.prefName == "")
+                return;
+
+            NetworkDataOption.ReplicateObject newReplicateData = new NetworkDataOption.ReplicateObject();
+            newReplicateData.ownerID = clientID;
+            newReplicateData.objectID = data;
+            newReplicateData.prefName = tempSpawnNetworkObj.prefName;
+            newReplicateData.position = tempSpawnNetworkObj.position;
+            newReplicateData.rotation = tempSpawnNetworkObj.rotation;
+
+            GameObject prefObj = Resources.Load(newReplicateData.prefName) as GameObject;
+            GameObject newGameObject = Instantiate(prefObj, newReplicateData.position, newReplicateData.rotation);
+
+            newReplicateData.netObj = newGameObject.GetComponent<NetworkObject>();
+            newReplicateData.netObj.replicateData = newReplicateData;
+
+            replicateListSend.replicateObjectList.Add(newReplicateData);
+
+            tempSpawnNetworkObj = null;
         }
     }
 }

@@ -3,6 +3,7 @@ const server = require('http').Server(app);
 const websocket = require('ws');
 const wss = new websocket.Server({server});
 const sqlite = require('sqlite3').verbose();
+const uuid = require('uuid');
 
 
 var database = new sqlite.Database('./database/chatDB.db', sqlite.OPEN_CREATE | sqlite.OPEN_READWRITE, (err)=>{
@@ -27,6 +28,8 @@ var roomList = [];
 var roomMap = new Map();
 
 wss.on("connection", (ws)=>{
+
+    Connect(ws);
 
     ws.on("message", (data)=>{
         //console.log("send from client :"+ data);
@@ -130,6 +133,12 @@ wss.on("connection", (ws)=>{
         else if(toJsonObj.eventName == "GetPlayerList"){
 
         }
+        else if(toJsonObj.eventName == "RequestUIDObject"){
+            RequestUIDObject(ws);
+        }
+        else if(toJsonObj.eventName == "ReplicateData"){
+            ReplicateData(ws, toJsonObj.roomName, toJsonObj.data);
+        }
     });
 
     ws.on("close", ()=>{
@@ -143,9 +152,43 @@ wss.on("connection", (ws)=>{
     });
 });
 
-function Boardcast()
-{
+function Connect(ws){
+
+    let uid = uuid.v1();
+    let callbackMsg = {
+        eventName:"Connect",
+        data:uid
+    }
+    ws.send(JSON.stringify(callbackMsg));
+}
+
+function Boardcast(){
+    for(let keyRoom of roomMap.keys()){
+        let wsList = roomMap.get(keyRoom).wsList;
+
+        for(let keyClient of wsList.keys()){
+
+            let replicateData = wsList.get(keyClient).replicateData;
+
+            if(replicateData != undefined && replicateData != "")
+            {
+                for(let keyOtherClient of wsList.keys()){
+
+                    if(keyClient != keyOtherClient)
+                    {
+                        let callbackMsg = {
+                            eventName:"ReplicateData",
+                            data:replicateData
+                        }
     
+                        keyOtherClient.send(JSON.stringify(callbackMsg));
+                    }
+                }
+            }
+
+            console.log(replicateData);
+        }
+    }
 }
 
 function CreateRoom(ws, roomOption){
@@ -217,3 +260,21 @@ function LeaveRoom(ws, callback){
     callback(false, "");
     return;
 }
+
+function RequestUIDObject(ws){
+
+    let uid = uuid.v1();
+    let callbackMsg = {
+        eventName:"RequestUIDObject",
+        data:uid
+    }
+    ws.send(JSON.stringify(callbackMsg));
+}
+
+function ReplicateData(ws, roomName, data){
+    roomMap.get(roomName).wsList.set(ws, {
+        replicateData:data
+    });
+}
+
+setInterval(Boardcast, 1000);

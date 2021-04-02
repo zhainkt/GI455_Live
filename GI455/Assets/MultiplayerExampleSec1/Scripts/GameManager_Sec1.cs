@@ -5,7 +5,22 @@ using MultiplayerExampleSec1;
 
 public class GameManager_Sec1 : MonoBehaviour
 {
+    [SerializeField]
+    public class TestSendOnce
+    {
+        public int hp;
+    }
+
     public string roomName;
+
+    public int currentScore;
+
+    public static GameManager_Sec1 instance;
+
+    public void Awake()
+    {
+        instance = this;
+    }
 
     public void OnGUI()
     {
@@ -29,7 +44,26 @@ public class GameManager_Sec1 : MonoBehaviour
 
                     SocketConnection_Sec1.instance.CreateRoom(roomOption);
                 }
+
+                if(GUILayout.Button("JoinRoom"))
+                {
+                    MultiplayerExampleSec1.Room.RoomOption roomOption = new MultiplayerExampleSec1.Room.RoomOption();
+                    roomOption.roomName = roomName;
+                    SocketConnection_Sec1.instance.JoinRoom(roomOption);
+                }
+            }
+            else
+            {
+                if(GUILayout.Button("SpawnNetworkObject"))
+                {
+                    SocketConnection_Sec1.instance.SpawnNetworkObject("Sphere_1", Vector3.zero, Quaternion.identity);
+                }
             }
         }
+    }
+
+    public void AddScore(int addedScore)
+    {
+        currentScore += addedScore;
     }
 }

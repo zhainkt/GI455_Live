@@ -183,8 +183,8 @@ namespace MultiplyerExample
             }
 
             tempSpawnNetworkObj.prefName = prefName;
-            tempSpawnNetworkObj.SetPositionData(position);
-            tempSpawnNetworkObj.SetRotationData(rotation);
+            tempSpawnNetworkObj.position = position;
+            tempSpawnNetworkObj.rotation = rotation;
         }
 
         public void DestroyNetworkObject(string objectID)
@@ -234,8 +234,8 @@ namespace MultiplyerExample
                     {
                         if(replicationObj.Value.netObject != null && replicationObj.Value.isMarkRemove == false)
                         {
-                            replicationObj.Value.SetPositionData(replicationObj.Value.netObject.transform.position);
-                            replicationObj.Value.SetRotationData(replicationObj.Value.netObject.transform.rotation);
+                            replicationObj.Value.position = replicationObj.Value.netObject.transform.position;
+                            replicationObj.Value.rotation = replicationObj.Value.netObject.transform.rotation;
                         }
                         else if(replicationObj.Value.netObject != null && replicationObj.Value.isMarkRemove == true)
                         {
@@ -382,8 +382,8 @@ namespace MultiplyerExample
             string toJson = JsonUtility.ToJson(data);*/
             //Debug.Log("total send byte : " + System.Text.ASCIIEncoding.ASCII.GetByteCount(toJson));
 
-            byte[] byteArr = replicateSend.ToByteArr();
-            ws.Send(byteArr);
+            //byte[] byteArr = replicateSend.ToByteArr();
+            //ws.Send(byteArr);
         }
 
         private void Internal_OnCreateRoom(string callbackData)
@@ -414,7 +414,7 @@ namespace MultiplyerExample
         private void Internal_ReplicateData(byte[] bytes)
         {
             ReplicateList newReplicationList = new ReplicateList();
-            newReplicationList = newReplicationList.FromByteArr(bytes);
+            //newReplicationList = newReplicationList.FromByteArr(bytes);
 
             //ReplicateSendData replicateData = JsonUtility.FromJson<ReplicateSendData>(jsonStr);
 
@@ -440,13 +440,15 @@ namespace MultiplyerExample
                 {
                     if(replicateObj.isMarkRemove == false)
                     {
-                        replicationObjectDict[objectID].SetPositionData(replicateObj.GetPositionData());
-                        replicationObjectDict[objectID].SetRotationData(replicateObj.GetRotationData());
+                        //replicationObjectDict[objectID].SetPositionData(replicateObj.GetPositionData());
+                        //replicationObjectDict[objectID].SetRotationData(replicateObj.GetRotationData());
+                        replicationObjectDict[objectID].position = replicateObj.position;
+                        replicationObjectDict[objectID].rotation = replicateObj.rotation;
 
                         if(replicationObjectDict[objectID].netObject != null)
                         {
-                            replicationObjectDict[objectID].netObject.position = replicationObjectDict[objectID].GetPositionData();
-                            replicationObjectDict[objectID].netObject.rotation = replicationObjectDict[objectID].GetRotationData();
+                            replicationObjectDict[objectID].netObject.position = replicationObjectDict[objectID].position;
+                            replicationObjectDict[objectID].netObject.rotation = replicationObjectDict[objectID].rotation;
                         }
                         else if(replicateObj.isMarkRemove == true && replicateObj.netObject != null)
                         {
@@ -477,10 +479,10 @@ namespace MultiplyerExample
                     NetObject newNetObject = newGameObject.GetComponent<NetObject>();
                     newNetObject.ownerID = replicateObj.ownerID;
                     newNetObject.objectID = replicateObj.objectID;
-                    newNetObject.position = replicateObj.GetPositionData();
-                    newNetObject.rotation = replicateObj.GetRotationData();
-                    newNetObject.transform.position = replicateObj.GetPositionData();
-                    newNetObject.transform.rotation = replicateObj.GetRotationData();
+                    newNetObject.position = replicateObj.position;
+                    newNetObject.rotation = replicateObj.rotation;
+                    newNetObject.transform.position = replicateObj.position;
+                    newNetObject.transform.rotation = replicateObj.rotation;
                     replicateObj.netObject = newNetObject;
                     replicationObjectDict.Add(objectID, replicateObj);
                 }
@@ -498,17 +500,17 @@ namespace MultiplyerExample
             newReplicateObject.ownerID = clientID;
             newReplicateObject.objectID = uid;
             newReplicateObject.prefName = tempSpawnNetworkObj.prefName;
-            newReplicateObject.SetPositionData(tempSpawnNetworkObj.GetPositionData());
-            newReplicateObject.SetRotationData(tempSpawnNetworkObj.GetRotationData());
+            newReplicateObject.position = tempSpawnNetworkObj.position;
+            newReplicateObject.rotation = tempSpawnNetworkObj.rotation;
 
             GameObject newGameObject = Instantiate(Resources.Load(newReplicateObject.prefName)) as GameObject;
             NetObject newNetObject = newGameObject.GetComponent<NetObject>();
             newNetObject.ownerID = clientID;
             newNetObject.objectID = uid;
-            newNetObject.position = newReplicateObject.GetPositionData();
-            newNetObject.rotation = newReplicateObject.GetRotationData();
-            newNetObject.transform.position = newReplicateObject.GetPositionData();
-            newNetObject.transform.rotation = newReplicateObject.GetRotationData();
+            newNetObject.position = newReplicateObject.position;
+            newNetObject.rotation = newReplicateObject.rotation;
+            newNetObject.transform.position = newReplicateObject.position;
+            newNetObject.transform.rotation = newReplicateObject.rotation;
             newReplicateObject.netObject = newNetObject;
 
             replicateSend.replicationObjectDict.Add(uid, newReplicateObject);

@@ -60,36 +60,11 @@ namespace MultiplyerExample
         public string objectID;
         public bool isMarkRemove;
         public string prefName;
-        private float[] position = new float[3];
-        private float[] rotation = new float[4];
+        public Vector3 position;
+        public Quaternion rotation;
 
         [NonSerialized]
         public NetObject netObject;
-        
-        public void SetPositionData(Vector3 toSet)
-        {
-            position[0] = float.Parse(toSet.x.ToString("0.0"));
-            position[1] = float.Parse(toSet.y.ToString("0.0"));
-            position[2] = float.Parse(toSet.z.ToString("0.0"));
-        }
-
-        public void SetRotationData(Quaternion toSet)
-        {
-            rotation[0] = float.Parse(toSet.x.ToString("0.0"));
-            rotation[1] = float.Parse(toSet.y.ToString("0.0"));
-            rotation[2] = float.Parse(toSet.z.ToString("0.0"));
-            rotation[2] = float.Parse(toSet.w.ToString("0.0"));
-        }
-
-        public Vector3 GetPositionData()
-        {
-            return new Vector3(position[0], position[1], position[2]);
-        }
-
-        public Quaternion GetRotationData()
-        {
-            return new Quaternion(rotation[0], rotation[1], rotation[2], rotation[3]);
-        }
     }
 
     [Serializable]
@@ -100,7 +75,7 @@ namespace MultiplyerExample
         [NonSerialized]
         public Dictionary<string, ReplicateObject> replicationObjectDict = new Dictionary<string, ReplicateObject>();
 
-        public byte[] ToByteArr()
+        /*public byte[] ToByteArr()
         {
             var binFormatter = new BinaryFormatter();
             var mStream = new MemoryStream();
@@ -116,6 +91,6 @@ namespace MultiplyerExample
             mStream.Write(byteArr, 0, byteArr.Length);
             mStream.Position = 0;
             return binFormatter.Deserialize(mStream) as ReplicateList;
-        }
+        }*/
     }
 }

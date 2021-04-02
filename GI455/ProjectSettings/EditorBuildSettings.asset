@@ -14,7 +14,13 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/ProgramChatWithJson/Scenes/Chat.unity
     guid: ffc743c120683e2428ffd88c2a51f97a
-  - enabled: 1
+  - enabled: 0
     path: Assets/MultipleyerExample/Scenes/Multiplayer.unity
     guid: 0e3cbb09c51b4fb478e9987d1c4703cb
+  - enabled: 1
+    path: Assets/MultiplayerExampleSec1/Scenes/Multiplayer_Sec1.unity
+    guid: 4a3680231f0ed624a82255c878b636b4
+  - enabled: 0
+    path: Assets/MultiplayerExampleSec2/Scenes/Multiplayer_sec2.unity
+    guid: 81ffd935db87f26458e12fc8ade946a7
   m_configObjects: {}

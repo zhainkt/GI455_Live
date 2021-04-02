@@ -3,6 +3,7 @@ const server = require('http').Server(app);
 const websocket = require('ws');
 const wss = new websocket.Server({server});
 const sqlite = require('sqlite3').verbose();
+const uuid = require('uuid');
 
 
 var database = new sqlite.Database('./database/chatDB.db', sqlite.OPEN_CREATE | sqlite.OPEN_READWRITE, (err)=>{
@@ -28,6 +29,7 @@ var roomMap = new Map();
 
 wss.on("connection", (ws)=>{
     
+    ClientConnect(ws);
     console.log("client connected.");
 
     ws.on("message", (data)=>{
@@ -133,6 +135,12 @@ wss.on("connection", (ws)=>{
                 ws.send(toJsonStr);
             });
         }
+        else if(toJsonObj.eventName == "RequestUIDObject"){
+            RequestUIDObject(ws);
+        }
+        else if(toJsonObj.eventName == "ReplicateData"){
+            ReplicateData(ws, toJsonObj.roomName, toJsonObj.data);
+        }
     });
 
     ws.on("close", ()=>{
@@ -148,9 +156,47 @@ wss.on("connection", (ws)=>{
     });
 });
 
-function Boardcast(ws, data)
+function ClientConnect(ws){
+    ws.uid = uuid.v1();
+
+    let callbackMsg = {
+        eventName:"Connect",
+        data:ws.uid
+    }
+
+    ws.send(JSON.stringify(callbackMsg));
+}
+
+function Boardcast()
 {
+    for(let keyRoom of roomMap.keys())
+    {
+        let wsList = roomMap.get(keyRoom).wsList;
+
+        for(let keyClient of wsList.keys())
+        {
+            for(let keyOtherClient of wsList.keys())
+            {
+                let otherWs = keyOtherClient;
+                let replicateData = wsList.get(keyClient).replicateData;
+
+                if(replicateData != undefined && replicateData != "")
+                {
+                    if(keyClient != keyOtherClient)
+                    {
+                        let callbackMsg = {
+                            eventName:"ReplicateData",
+                            data:replicateData
+                        }
     
+                        otherWs.send(JSON.stringify(callbackMsg));
+                    }
+                }
+
+                console.log(replicateData);
+            }
+        }
+    }
 }
 
 function CreateRoom(ws, roomOption){
@@ -170,6 +216,7 @@ function CreateRoom(ws, roomOption){
     {
         let roomName = roomOption.roomName;
         roomMap.set(roomName, {
+            roomOption:roomOption,
             wsList: new Map()
         });
 
@@ -211,10 +258,10 @@ function JoinRoom(ws, roomOption){
         {
             roomMap.get(roomName).wsList.set(ws, {});
             callbackMsg.status = true;
-            callbackMsg.roomOption = JSON.stringify(roomList[indexRoom].roomOption);
+            callbackMsg.data = JSON.stringify(roomMap.get(roomName).roomOption);
         }
     }
-    ws.send(JSON.stringify(eventData));
+    ws.send(JSON.stringify(callbackMsg));
 }
 
 function LeaveRoom(ws, callback){
@@ -228,3 +275,23 @@ function LeaveRoom(ws, callback){
     callback(false, "");
     return;
 }
+
+function RequestUIDObject(ws){
+
+    let uid = uuid.v1();
+    var callbackMsg = {
+        eventName:"RequestUIDObject",
+        data:uid
+    }
+
+    ws.send(JSON.stringify(callbackMsg));
+}
+
+function ReplicateData(ws, roomName, data){
+
+    roomMap.get(roomName).wsList.set(ws, {
+        replicateData:data
+    });
+}
+
+setInterval(Boardcast, 100);

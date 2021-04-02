@@ -84,6 +84,26 @@ namespace ChatWebSocket_Room
 
         private WebSocket ws;
 
+        public delegate void A(string a, string data);
+
+        public event A OnA;
+
+
+        /// <summary>
+        /// UIManager
+        /// </summary>
+        public void Exam()
+        {
+            OnA += B;
+
+            OnA("A", "X");
+        }
+
+        public void B(string b, string data)
+        {
+
+        }
+
         public delegate void DelegateHandler(string msg);
         public delegate void DelegateHandlerAddMoney(string status, int money);
 

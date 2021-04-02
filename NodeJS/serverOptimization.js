@@ -79,10 +79,6 @@ wss.on("connection", (ws)=>{
                 }
             });
         }
-        else if(toJsonObj.eventName == "SendMessage")//Send Message
-        {
-            Boardcast(ws, toJsonObj.data);
-        }
         else if(toJsonObj.eventName == "Login"){
             
             var splitData = toJsonObj.data.split('#');
@@ -214,31 +210,31 @@ function JoinRoom(ws, roomOption){
     let roomName = roomOption.roomName;
     let isFoundRoom = roomMap.has(roomName);
 
-    let eventData = {
+    let callbackMsg = {
         eventName:"JoinRoom",
         status:false,
     }
 
     if(isFoundRoom === false)
     {
-        eventData.status = false;
+        callbackMsg.status = false;
     }
     else
     {
-        var isFoundClientInRoom = roomMap.get(roomName).wsList.has(ws); 
+        let isFoundClientInRoom = roomMap.get(roomName).wsList.has(ws); 
 
-        if(isFoundClientInRoom)
+        if(isFoundClientInRoom === true)
         {
-            eventData.status = false;
+            callbackMsg.status = false;
         }
         else
         {
             roomMap.get(roomName).wsList.set(ws, {});
-            eventData.status = true;
-            eventData.roomOption = JSON.stringify(roomOption);
+            callbackMsg.status = true;
+            callbackMsg.data = JSON.stringify(roomMap.get(roomName).roomOption);
         }
     }
-    ws.send(JSON.stringify(eventData));
+    ws.send(JSON.stringify(callbackMsg));
 }
 
 function LeaveRoom(ws, callback){
@@ -296,7 +292,7 @@ function Boardcast()
                 {
                     let callbackMsg = {
                         eventName:"ReplicateData",
-                        replicateData:replicateData
+                        data:replicateData
                     }
                     ws.send(JSON.stringify(callbackMsg));
                 }
@@ -310,7 +306,7 @@ function Boardcast()
                     ws.send(JSON.stringify(callbackMsg));
                 }
 
-                console.log(replicateData);
+                //console.log(replicateData);
             }
 
             if(wsList.get(keyClient).onceData != "")
